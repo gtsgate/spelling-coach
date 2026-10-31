@@ -73,6 +73,10 @@ ul.miss li{display:flex;justify-content:space-between;border-top:1px solid var(-
 .status{font-size:14px;margin-top:10px;min-height:20px}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
+.masked{-webkit-text-security:disc;text-security:disc}
+.rec{display:inline-flex;align-items:center;gap:8px;color:var(--accent);font-weight:600}
+.rec i{width:10px;height:10px;border-radius:50%;background:var(--bad);animation:pulse 1s infinite}
+.said{margin-top:8px;font-weight:400;font-size:14px;color:var(--muted)}
 .mic.on{background:var(--bad);color:#fff;border-color:var(--bad)}
 </style>
 </head>
@@ -135,7 +139,7 @@ ul.miss li{display:flex;justify-content:space-between;border-top:1px solid var(-
     </div>
     <div class="card">
       <div class="row" style="gap:8px">
-        <input type="text" id="answer" class="answer grow" placeholder="Spell it…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+        <input type="text" id="answer" class="answer grow masked" placeholder="Spell it…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
         <button class="icon mic hide" id="micBtn" aria-label="Spell by voice" style="padding:14px 16px;font-size:20px">🎤</button>
       </div>
       <div class="heard" id="heard"></div>
@@ -175,6 +179,10 @@ ul.miss li{display:flex;justify-content:space-between;border-top:1px solid var(-
       <h2>Settings</h2>
       <div class="toggle"><div><b>Hands-free voice</b><span class="muted">Listen automatically after each word and check when you pause. Say “repeat”, “slowly”, “sentence” or “skip” anytime.</span></div>
         <label class="switch"><input type="checkbox" data-k="handsFree"><span></span></label></div>
+      <div class="toggle"><div><b>Hide my answer until I send</b><span class="muted">No words or letters on screen while spelling — no peeking</span></div>
+        <label class="switch"><input type="checkbox" data-k="hideAnswer"><span></span></label></div>
+      <div class="toggle"><div><b>Stop when I say the word again</b><span class="muted">“car — C, A, R — car”: the mic turns off and sends by itself</span></div>
+        <label class="switch"><input type="checkbox" data-k="stopOnWord"><span></span></label></div>
       <div class="toggle"><div><b>When to check my answer</b><span class="muted">“When I send” waits as long as you need — tap Send answer or say “done”.</span></div>
         <select data-k="sendMode" style="width:150px"><option value="send">When I send</option><option value="pause">When I pause</option></select></div>
       <div class="toggle"><div><b>Allow restarts</b><span class="muted">Turn off for a harder challenge: one go only. Pausing or saying “umm” is fine, but starting the letters over counts as wrong.</span></div>
@@ -208,7 +216,7 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem('sc_'+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem('sc_'+k, JSON.stringify(v)); }catch(e){} }
 };
-const S = Object.assign({sendMode:'send', handsFree:true, allowRestarts:true, strictBee:false, secondChance:true, reveal:true, autoNext:true, extra:false, extraCount:'10', accent:'en-US', rate:'0.9', shuffle:true}, store.get('settings', {}));
+const S = Object.assign({hideAnswer:true, stopOnWord:true, sendMode:'send', handsFree:true, allowRestarts:true, strictBee:false, secondChance:true, reveal:true, autoNext:true, extra:false, extraCount:'10', accent:'en-US', rate:'0.9', shuffle:true}, store.get('settings', {}));
 let words = store.get('words', []);
 let images = []; // {blob, url}
 let sample = null, canImages = false;
@@ -513,6 +521,7 @@ function loadWord(){
   $('bar').style.width = (idx / deck.length * 100) + '%';
   $('bonusTag').classList.toggle('hide', !it.bonus);
   $('answer').value = ''; $('heard').textContent = ''; $('sentence').textContent = '';
+  $('answer').classList.toggle('masked', !!S.hideAnswer);
   $('fb').className = 'fb'; $('fb').innerHTML = '';
   $('nextBtn').classList.add('hide');
   $('checkBtn').disabled = false; $('skipBtn').disabled = false;
@@ -546,10 +555,11 @@ $('answer').addEventListener('input', () => {
   const r = analyze($('answer').value, deck[idx] ? deck[idx].w : '');
   const fmt = x => x.toUpperCase().split('').join(' ');
   clearTimeout(window.__autoT);
-  if (S.sendMode !== 'send' && !listening && !locked && r.spelled){
+  if ((S.sendMode !== 'send' || S.stopOnWord) && !listening && !locked && r.spelled){
     const ws = $('answer').value.trim().split(/\s+/);
     if (ws.length > 2 && norm(ws[ws.length - 1]) === norm(deck[idx].w)) window.__autoT = setTimeout(() => { if (!locked) check(); }, 1200);
   }
+  if (S.hideAnswer && !locked){ $('heard').innerHTML = $('answer').value.trim() ? (listening ? '<span class="rec"><i></i>Listening — answer hidden until you send</span>' : '<span class="rec">✓ Answer recorded — hidden until you send</span>') : (listening ? '<span class="rec"><i></i>Listening…</span>' : ''); return; }
   $('heard').innerHTML = r.attempts.length ? r.attempts.map((x, i) => i === r.attempts.length - 1 ? `<b class="letters">${fmt(x)}</b>` : `<span class="letters" style="opacity:.5;text-decoration:line-through">${fmt(x)}</span>`).join(' &nbsp;') : '';
 });
 $('answer').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); if (!locked) check(); else if (!$('nextBtn').classList.contains('hide')) next(); } });
@@ -567,10 +577,14 @@ function diffMarkup(given, target){
   return h;
 }
 
+const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let lastSaid = '';
+const saidLine = () => lastSaid ? `<div class="said">You said: “${esc(lastSaid)}”</div>` : '';
 async function check(){
   if (locked) return;
   stopListening();
   const raw = $('answer').value.trim();
+  lastSaid = raw;
   if (!raw){ $('answer').focus(); return; }
   const target = deck[idx].w, res = analyze(raw, target), given = res.given;
   if (!given && !res.attempts.length){ listen(); return; }
@@ -584,7 +598,7 @@ async function check(){
   if (S.secondChance && attempt === 0){
     attempt = 1;
     $('fb').className = 'fb retry';
-    $('fb').innerHTML = `${res.changed ? 'You changed letters after restarting. ' : res.restarted ? 'Restarts are off — ' : 'Not quite — '}try once more.<div class="letters" style="margin-top:6px">You spelled: ${res.changed ? res.attempts.map(x => x.toUpperCase()).join(' → ') : diffMarkup(given, target)}</div>`;
+    $('fb').innerHTML = `${res.changed ? 'You changed letters after restarting. ' : res.restarted ? 'Restarts are off — ' : 'Not quite — '}try once more.<div class="letters" style="margin-top:6px">You spelled: ${res.changed ? res.attempts.map(x => x.toUpperCase()).join(' → ') : diffMarkup(given, target)}</div>${saidLine()}`;
     $('answer').value = ''; $('heard').textContent = ''; heldText = ''; idleRestarts = 0;
     await say(`Not quite. Try again. ${target}.`);
     $('answer').focus(); listen();
@@ -597,6 +611,8 @@ async function finish(ok, given, skipped, note){
   locked = true;
   stopListening();
   clearTimeout(nextTimer);
+  if (skipped) lastSaid = '';
+  $('answer').classList.remove('masked'); $('answer').dispatchEvent(new Event('input'));
   const it = deck[idx];
   results.push({w: it.w, ok, given, bonus: it.bonus, skipped: !!skipped, second: attempt > 0});
   $('checkBtn').disabled = true; $('skipBtn').disabled = true;
@@ -604,18 +620,18 @@ async function finish(ok, given, skipped, note){
   $('qScore').textContent = `✓ ${ok2} · ✗ ${results.length - ok2}`;
   if (ok){
     $('fb').className = 'fb good';
-    $('fb').innerHTML = `Correct!${attempt ? ' (second try)' : ''}<span class="word">${it.w}</span>`;
+    $('fb').innerHTML = `Correct!${attempt ? ' (second try)' : ''}<span class="word">${it.w}</span>${saidLine()}`;
     await say('Correct!');
-    nextTimer = setTimeout(next, S.autoNext ? 500 : 0);
+    nextTimer = setTimeout(next, S.autoNext ? 1500 : 0);
     if (!S.autoNext){ clearTimeout(nextTimer); $('nextBtn').classList.remove('hide'); }
     return;
   }
   $('fb').className = 'fb bad';
   if (S.reveal){
-    $('fb').innerHTML = `${note ? note + '<br>' : ''}${skipped ? 'Skipped.' : 'Incorrect.'} The correct spelling is<span class="word">${it.w}</span>${given ? `<div class="letters muted" style="margin-top:6px;font-weight:400">You spelled: ${given.includes('→') ? given.toUpperCase() : diffMarkup(given, it.w)}</div>` : ''}`;
+    $('fb').innerHTML = `${note ? note + '<br>' : ''}${skipped ? 'Skipped.' : 'Incorrect.'} The correct spelling is<span class="word">${it.w}</span>${given ? `<div class="letters muted" style="margin-top:6px;font-weight:400">You spelled: ${given.includes('→') ? given.toUpperCase() : diffMarkup(given, it.w)}</div>` : ''}${saidLine()}`;
     await say(`${skipped ? '' : 'Incorrect.'} ${it.w} is spelled: ${spellOut(it.w)}.`, {rate: 0.8});
   } else {
-    $('fb').innerHTML = skipped ? 'Skipped.' : 'Incorrect.';
+    $('fb').innerHTML = (skipped ? 'Skipped.' : 'Incorrect.') + saidLine();
     await say(skipped ? 'Skipped.' : 'Incorrect.');
   }
   if (S.autoNext) nextTimer = setTimeout(next, 1400);
@@ -662,7 +678,7 @@ const inQuiz = () => !$('quiz').classList.contains('hide');
 function stopListening(){ clearTimeout(silenceT); if (rec){ rec._cancel = true; try{ rec.abort(); }catch(e){} } listening = false; $('micBtn').classList.remove('on'); }
 function listen(){ if (voiceOK && S.handsFree && !locked && inQuiz()) startRec(true); }
 const KB_HINT_PAUSE = 'Tap the box, then the 🎤 on your keyboard. Say “cat — see, ay, tee — cat”: it checks as soon as you say the word at the end.';
-const KB_HINT_SEND = 'Tap the box, then the 🎤 on your keyboard. Spell at your own pace, then tap Send answer.';
+const KB_HINT_SEND = 'Tap the box, then the 🎤 on your keyboard. Spell at your own pace; say the word again at the end or tap Send answer.';
 function voiceUnavailable(){
   voiceOK = false; $('micBtn').classList.add('hide');
   $('micHint').textContent = S.sendMode === 'send' ? KB_HINT_SEND : KB_HINT_PAUSE;
@@ -697,6 +713,13 @@ function startRec(auto){
         // Wait as long as needed; only "done" (or the Send button) submits.
         if (DONE_RE.test(text)){ submitReq = true; text = text.replace(DONE_RE, '').trim(); try{ r.stop(); }catch(e){} }
         $('answer').value = text; $('answer').dispatchEvent(new Event('input'));
+        // Bee style: "car — C, A, R — car": the word said again after the letters ends the answer.
+        clearTimeout(silenceT);
+        if (S.stopOnWord && !submitReq){
+          const ws = text.split(/\s+/);
+          if (ws.length > 2 && norm(ws[ws.length - 1]) === norm(deck[idx].w) && analyze(text, deck[idx].w).attempts.length)
+            silenceT = setTimeout(() => { submitReq = true; try{ r.stop(); }catch(e){} }, 900);
+        }
         return;
       }
       $('answer').value = text;
@@ -736,7 +759,8 @@ function startRec(auto){
       else $('micHint').textContent = 'Tap 🎤 when you’re ready to spell.';
     };
     r.start(); listening = true; $('micBtn').classList.add('on');
-    $('micHint').textContent = manual ? 'Listening… take your time. Tap Send or say “done” when finished.' : 'Listening… say the word, spell it, say the word again.';
+    if (S.hideAnswer) $('answer').dispatchEvent(new Event('input'));
+    $('micHint').textContent = manual ? (S.stopOnWord ? 'Listening… take your time. Say the word again at the end (or “done”) to send.' : 'Listening… take your time. Tap Send or say “done” when finished.') : 'Listening… say the word, spell it, say the word again.';
   }catch(e){ listening = false; }
 }
 if (SR){
