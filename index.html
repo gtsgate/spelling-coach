@@ -384,6 +384,33 @@ function loadTesseract(){
     s.onload = res; s.onerror = rej; document.head.appendChild(s);
   });
 }
+/* Keep only the test words: drop titles, section labels, Name/Date lines and instructions. */
+const HEAD_WORDS = new Set('spelling spell words word list week unit lesson test quiz name date grade class teacher school score page bonus challenge review homework term level set group practice practise total marks mark day monday tuesday wednesday thursday friday saturday sunday sentence sentences dictation'.split(' '));
+const STOP = new Set('the a an of to and or for with in on at by your you this these that are is be write each use it from as into then them their our we will learn study copy below above following'.split(' '));
+function extractTestWords(text){
+  const lines = text.split('\n').map(l => l.trim()).filter(l => /[A-Za-z]{2,}/.test(l));
+  const NUM = /(?:^|\s)\(?\d{1,3}\s*[.)\-:]\s*/g;
+  const numbered = lines.filter(l => /^\(?\d{1,3}\s*[.)\-:]/.test(l));
+  const useNumbered = numbered.length >= 3 && numbered.length >= lines.length * 0.4;
+  const out = [];
+  for (const line of (useNumbered ? numbered : lines)){
+    if (/^[^:]{0,25}:/.test(line) && !/^\(?\d{1,3}\s*[:]/.test(line)) continue;        // "Name:", "Date:", "Week 5:"
+    if (/_{3,}|\.{4,}/.test(line) && !useNumbered) continue;                              // fill-in blanks
+    // a numbered line may hold several columns: "1. apple   11. river"
+    const parts = useNumbered ? line.split(NUM).filter(Boolean) : [line];
+    for (const part of parts){
+      const toks = part.match(/[A-Za-z][A-Za-z'\-]*[A-Za-z]|\b[aI]\b/g) || [];
+      if (!toks.length) continue;
+      const low = toks.map(t => t.toLowerCase());
+      if (!useNumbered){
+        if (low.some(t => HEAD_WORDS.has(t))) continue;                                   // "Spelling Words Week 5"
+        if (low.length >= 3 && low.filter(t => STOP.has(t)).length >= 1) continue;        // instruction sentence
+      }
+      for (const t of low) if (!HEAD_WORDS.has(t) || useNumbered) out.push(t);
+    }
+  }
+  return out;
+}
 async function ocrLocal(blobs){
   await loadTesseract();
   const worker = await Tesseract.createWorker('eng');
@@ -391,10 +418,7 @@ async function ocrLocal(blobs){
   for (let i = 0; i < blobs.length; i++){
     $('readStatus').innerHTML = `<span class="spin"></span>Reading picture ${i + 1} of ${blobs.length}…`;
     const { data } = await worker.recognize(blobs[i]);
-    for (const line of data.text.split('\n')){
-      const toks = line.replace(/^\s*[\d]+[.)\-:]?\s*/, '').match(/[A-Za-z][A-Za-z'\-]*[A-Za-z]/g) || [];
-      for (const t of toks) out.push(/^[A-Z][a-z]/.test(t) ? t.toLowerCase() : t.toLowerCase());
-    }
+    out.push(...extractTestWords(data.text));
   }
   await worker.terminate();
   return out;
@@ -425,7 +449,7 @@ $('readBtn').onclick = async () => {
     const blobs = await Promise.all(images.map(i => shrink(i.blob)));
     const prompt = `These images are photos of a spelling word list (for spelling practice).
 Extract every word the student must learn to spell, exactly as printed (keep original spelling, hyphens and apostrophes; use lowercase unless the word is a proper noun).
-Ignore numbering, bullets, headings, dates, instructions, names of the teacher/school, and page numbers. If a word appears twice, list it once.
+Return ONLY the test words themselves. Do NOT include the title or any heading or section label (e.g. "Spelling Words", "Week 5", "Unit 3", "Bonus", "Challenge words"), instructions, example sentences, "Name:"/"Date:" fields, teacher or school names, numbering, bullets, or page numbers. If a word appears twice, list it once.
 Reply with JSON only: {"words":["...","..."]}`;
     const r = await sample.json(prompt, {images: blobs, modelTier: 'default'});
     const list = Array.isArray(r) ? r : (r && r.words) || [];
