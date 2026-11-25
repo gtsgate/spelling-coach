@@ -12,6 +12,7 @@ const DRAFT_KEY = 'gft.draft.v1';
 const SENT_KEY = 'gft.sent.v1';
 const COUNTER_KEY = 'gft.counter.v1';
 const ME_KEY = 'gft.me';
+const APPROVED_KEY = 'gft.approved.v1';
 const DIGITS_KEY = 'gft.digits';
 
 const listeners = { draft: new Set(), sent: new Set(), data: new Set(), me: new Set() };
@@ -56,6 +57,8 @@ export const store = {
   sentStale: new Set(),
   /** Sent proposals that the changelog now lists as applied (filled on load; views may toast them) */
   justApproved: [],
+  /** This visitor's proposals that were approved (local history, newest first, max 30): {id, at, via, ops, approvedAt, issue} — listed on #/me */
+  approved: [],
   /** id sets for badges: draft-only vs sent-awaiting-approval */
   pending: { draft: new Set(), sent: new Set(), created: new Set() },
   draftErrors: [],
@@ -84,6 +87,8 @@ export const store = {
     }
     const savedSent = loadJSON(SENT_KEY);
     if (Array.isArray(savedSent)) this.sent = savedSent.filter((s) => s && s.proposal && Array.isArray(s.proposal.ops));
+    const savedApproved = loadJSON(APPROVED_KEY);
+    if (Array.isArray(savedApproved)) this.approved = savedApproved.filter((a) => a && a.id);
     const savedMe = loadJSON(ME_KEY);
     this.me = savedMe ? (this.base.resolve ? this.base.resolve(savedMe)?.id || savedMe : savedMe) : null;
 
@@ -144,7 +149,7 @@ export const store = {
     const applied = new Set((this.changelog?.entries || []).map((e) => e.proposalId).filter(Boolean));
     const still = [];
     for (const s of this.sent) {
-      if (applied.has(s.id)) this.justApproved.push(s);
+      if (applied.has(s.id)) { this.justApproved.push(s); this.rememberApproved(s); }
       else still.push(s);
     }
     if (still.length !== this.sent.length) { this.sent = still; saveJSON(SENT_KEY, this.sent); }
@@ -340,6 +345,22 @@ export const store = {
     this.emit('sent');
     this.emit('draft');
     return entry;
+  },
+
+  /** Remember an approved proposal of this visitor (small summary only; the changelog holds the text). */
+  rememberApproved(s) {
+    if (!s || this.approved.some((a) => a.id === s.id)) return;
+    const entry = (this.changelog?.entries || []).find((e) => e.proposalId === s.id) || null;
+    const item = { id: s.id, at: s.at || '', via: s.via || '', ops: s.proposal?.ops?.length || 0, approvedAt: entry?.at || new Date().toISOString(), issue: entry?.issue ?? null };
+    this.approved = [item, ...this.approved].slice(0, 30);
+    saveJSON(APPROVED_KEY, this.approved);
+  },
+
+  /** Drop an approved proposal from the local history (#/me "forget"). */
+  forgetApproved(id) {
+    this.approved = this.approved.filter((a) => a.id !== id);
+    saveJSON(APPROVED_KEY, this.approved);
+    this.emit('sent');
   },
 
   /** Forget a sent proposal (e.g. the owner rejected it, or the visitor withdraws it). */
