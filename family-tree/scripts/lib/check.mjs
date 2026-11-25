@@ -14,33 +14,50 @@ import { encodeProposal } from '../../js/core/codec.js';
 import { LABELS, LABEL_DEFS, MARKERS, hasLabel } from './labels.mjs';
 import { parseMarker } from './render.mjs';
 import { hashProposal } from './hash.mjs';
-import { effectiveProposal, appliedEntry, depsFor, openIndex, findBotComment } from './proposal.mjs';
-import { checkComment, badCodeComment, noProposalComment } from './comments.mjs';
+import { clampBody } from './commands.mjs';
+import {
+  effectiveProposal, appliedEntry, depsFor, openIndex, findBotComment, idConflict, resolveDependencyRefs,
+} from './proposal.mjs';
+import { checkComment, badCodeComment, noProposalComment, scriptIssueText } from './comments.mjs';
 
 export const PREVIEW_CODE_MAX = 30000;
 
-/** Fields of the issue form ("### Heading\n\nvalue") — submitter and note, best effort (used when the proposal has none). */
+/**
+ * Fields of the issue form ("### Heading\n\nvalue") — submitter and note, best effort (used when the proposal has
+ * none). Parsed line by line (a section starts at a line beginning with "### "), so any body is read in linear time.
+ */
 export function formFields(body) {
-  const out = {};
-  const text = String(body || '');
-  const grab = (re) => {
-    const m = re.exec(text);
-    if (!m) return '';
-    const v = m[1].trim();
+  const sections = [];
+  let cur = null;
+  for (const raw of clampBody(body).split('\n')) {
+    const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+    if (line.startsWith('### ')) {
+      cur = { heading: line.slice(4, 4 + 300), lines: [] };
+      sections.push(cur);
+    } else if (cur) cur.lines.push(line);
+  }
+  const grab = (words) => {
+    const sec = sections.find((x) => words.some((w) => x.heading.toLowerCase().includes(w)));
+    if (!sec) return '';
+    const v = sec.lines.join('\n').trim();
     return v === '_No response_' ? '' : v;
   };
-  out.submitter = grab(/###[^\n]*(?:Your name|اسمك)[^\n]*\n+([\s\S]*?)(?=\n###|$)/i);
-  out.note = grab(/###[^\n]*(?:Note|ملاحظة)[^\n]*\n+([\s\S]*?)(?=\n###|$)/i);
-  return out;
+  return { submitter: grab(['your name', 'اسمك']), note: grab(['note', 'ملاحظة']) };
 }
 
-/** Bilingual lines for a list of Issues. */
+/** Bilingual lines for a list of Issues (codes of the scripts themselves, e.g. PROPOSAL_ID_REUSED, included). */
 export function issueLines(list, ctx) {
+  const one = (i, lang) => scriptIssueText(i, lang) ?? formatIssue(i, lang, ctx);
   return {
-    ar: list.map((i) => formatIssue(i, 'ar', ctx)),
-    en: list.map((i) => formatIssue(i, 'en', ctx)),
+    ar: list.map((i) => one(i, 'ar')),
+    en: list.map((i) => one(i, 'en')),
   };
 }
+
+/** The error of a proposal whose id an applied (or earlier-in-batch) proposal already uses under another hash. */
+export const idReusedIssue = (conflict) => ({
+  code: 'PROPOSAL_ID_REUSED', params: { proposalId: conflict.proposalId, issue: conflict.issue },
+});
 
 /** Preview link: <siteUrl>#/preview?code=<code>, or #/preview/<n> when the code is long. */
 export async function previewUrl(siteUrl, proposal, code, number) {
@@ -116,8 +133,16 @@ export async function checkIssue(ctx, number, opts = {}) {
   const result = applyProposal(data, eff.proposal, {
     mode: 'final', allowDestructive: true, refMap, appliedDeps, issue: number, actor: '', now: ctx.now(),
   });
+  // A proposal id is public: one already applied under another hash is never accepted (apply refuses it too).
+  const conflict = done ? null : idConflict(applied, eff.proposal, hash);
+  if (conflict) {
+    result.ok = false;
+    result.errors = [idReusedIssue(conflict), ...result.errors];
+  }
   const graph = buildGraph(normalizeData(data));
-  const names = { graph, refNames: refNames(eff.proposal, graph) };
+  // Refs of dependsOn proposals already applied are shown as the real people they resolve to.
+  const shown = resolveDependencyRefs(eff.proposal, refMap);
+  const names = { graph, refNames: refNames(shown, graph) };
   const dependsOnIssues = [];
   for (const e of result.errors) {
     if (e.code !== 'DEPENDS_ON_PENDING') continue;
@@ -128,8 +153,8 @@ export async function checkIssue(ctx, number, opts = {}) {
     }
     if (dependsOnIssues.length && e.params) e.params = { ...e.params, issue: dependsOnIssues[0] };
   }
-  const describe = describeProposal(eff.proposal, graph, 'en');
-  const describeAr = describeProposal(eff.proposal, graph, 'ar');
+  const describe = describeProposal(shown, graph, 'en');
+  const describeAr = describeProposal(shown, graph, 'ar');
   const destructive = result.ok ? result.destructive : describe.destructive;
   const failingOps = [...new Set(result.errors.filter((e) => Number.isInteger(e.op)).map((e) => e.op + 1))].sort((a, b) => a - b);
   const allOpErrors = result.errors.length > 0 && result.errors.every((e) => Number.isInteger(e.op));

@@ -319,7 +319,7 @@ function rerender() {
 const ARABIC = /[؀-ۿ]/;
 const thisYear = new Date().getFullYear();
 let thisHijriYear = 1460;
-try { thisHijriYear = Number(String(gregorianToHijri(new Date().toISOString().slice(0, 10))).slice(0, 4)) || 1460; } catch { /* keep */ }
+try { thisHijriYear = Number(String(gregorianToHijri(new Date().toISOString().slice(0, 10))?.hijri || '').slice(0, 4)) || 1460; } catch { /* keep */ }
 
 function autoEn(ar) {
   if (!ar || !ARABIC.test(ar)) return '';

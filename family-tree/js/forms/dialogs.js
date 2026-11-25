@@ -552,9 +552,12 @@ function openShell({ title, size = 'md', className = '', backdropClose = false }
     setActions(actions) {
       shell.primary = null;
       const btns = (actions || []).filter(Boolean).map((a) => {
+        const external = !!a.href && (a.external || /^(https?:|mailto:)/i.test(a.href));
         const b = h(a.href ? 'a' : 'button', {
           type: a.href ? undefined : 'button',
           href: a.href || undefined,
+          target: external ? '_blank' : undefined,
+          rel: external ? 'noopener' : undefined,
           class: ['btn', a.variant ? `btn-${a.variant}` : '', a.className || ''],
           disabled: a.href ? undefined : !!a.disabled,
           dataset: a.id ? { action: a.id } : undefined,
