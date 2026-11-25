@@ -1,0 +1,14 @@
+{
+  "name": "grand-family-tree",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bilingual (Arabic/English) collaborative family tree portal with owner-approved proposals.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test",
+    "validate": "node scripts/validate-data.mjs",
+    "serve": "python3 -m http.server 8080",
+    "e2e": "node tests/e2e/smoke.mjs"
+  }
+}
