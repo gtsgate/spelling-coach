@@ -4,7 +4,8 @@
 // See docs/SPEC.md §2 (data model), §3 (limits, enumerations) and §4 (schema.js API).
 
 import {
-  addYearsToDay, canonicalDate, canonicalHijri, dateSpan, hijriToGregorian, isValidDate, isValidHijri, truncateDate,
+  addYearsToDay, canonicalDate, canonicalHijri, dateSpan, fromDayNumber, hijriToGregorian, isValidDate, isValidHijri,
+  parseDate, parseHijri, truncateDate,
 } from './dates.js';
 
 // =========================================================================================================
@@ -165,12 +166,12 @@ function bilingual(v) {
   return { ar: str(v.ar), en: str(v.en) };
 }
 
-/** Array of unique trimmed non-empty strings (order kept). */
+/** Array of trimmed non-empty strings (order kept; non-strings dropped; duplicates dropped when `unique`). */
 function strList(v, { unique = true } = {}) {
   if (!Array.isArray(v)) return [];
   const out = [];
   for (const x of v) {
-    const s = str(x);
+    const s = typeof x === 'string' ? x.trim() : '';
     if (!s || (unique && out.includes(s))) continue;
     out.push(s);
   }
@@ -184,8 +185,8 @@ function emptyDateObj(withPlace) {
 /**
  * Normalize a date object {date, hijri, approx, place?}:
  *   * dates canonicalized ("1950-3-5" / Arabic digits → "1950-03-05"); unparseable text is kept for validation to report;
- *   * birth privacy: "hidden" clears date/hijri, "year" truncates both to the year (BEFORE deriving, so it is stable);
- *   * hijri set → date derived from it (Umm al-Qura); a year/month-only hijri sets approx.
+ *   * hijri set → date derived from it (Umm al-Qura): full → exact; year/month only → day 1 of that period, approx:true;
+ *   * birth privacy: "hidden" clears date/hijri; "year" truncates both to the year (see yearPrivacyDates).
  */
 function normalizeDateObj(raw, withPlace, privacy = 'full') {
   const o = isObj(raw) ? raw : (typeof raw === 'string' || typeof raw === 'number') ? { date: String(raw) } : {};
@@ -199,19 +200,44 @@ function normalizeDateObj(raw, withPlace, privacy = 'full') {
     hijri = '';
     approx = false;
   } else if (privacy === 'year') {
-    hijri = truncateDate(hijri, 'year', 'hijri');
-    date = truncateDate(date, 'year');
-  }
-  if (hijri) {
+    ({ date, hijri, approx } = yearPrivacyDates(date, hijri, approx));
+  } else if (hijri) {
     const g = hijriToGregorian(hijri);
     if (g) {
-      date = privacy === 'year' ? truncateDate(g.date, 'year') : g.date;
+      date = g.date;
       if (g.approx) approx = true;
     }
   }
   const out = { date, hijri, approx };
   if (withPlace) out.place = bilingual(o.place);
   return out;
+}
+
+/**
+ * Birth dates under privacy "year": both values are stored as years only. A Hijri year straddles two Gregorian years,
+ * so the Gregorian year is chosen to stay TRUE and STABLE across re-normalization:
+ *   1. a Hijri day/month was given → the Gregorian year of that day (or of day 1 of that month);
+ *   2. Hijri year only and the stored Gregorian year falls inside that Hijri year → keep it (it was derived earlier);
+ *   3. otherwise → the Gregorian year of 1 Muharram (spec rule "day 1 of that Hijri year").
+ */
+function yearPrivacyDates(date, hijri, approx) {
+  const yearDate = truncateDate(date, 'year');
+  if (!hijri) return { date: yearDate, hijri, approx };
+  const hp = parseHijri(hijri); // null for a non-existent day; its year may still be valid
+  const hijriYear = truncateDate(hijri, 'year', 'hijri');
+  const start = hijriToGregorian(hijriYear);
+  if (!start) return { date: yearDate, hijri: hijriYear, approx }; // invalid hijri: validateData reports it
+  let year = Number(start.date.slice(0, 4));
+  if (hp && hp.precision !== 'year') {
+    year = Number(hijriToGregorian(hijri).date.slice(0, 4));
+  } else {
+    const kept = parseDate(yearDate);
+    const span = dateSpan({ hijri: hijriYear });
+    if (kept && span && kept.year >= fromDayNumber(span.start).year && kept.year <= fromDayNumber(span.end).year) {
+      year = kept.year;
+    }
+  }
+  return { date: String(year).padStart(4, '0'), hijri: hijriYear, approx: true };
 }
 
 const dateIsEmpty = (d) => !d.date && !d.hijri && !d.approx && (!d.place || (!d.place.ar && !d.place.en));

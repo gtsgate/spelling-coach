@@ -19,6 +19,7 @@ import { writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { transliterate } from '../js/core/translit.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outArg = process.argv.indexOf('--out');
@@ -37,15 +38,24 @@ function makeId(prefix) {
   return prefix + s;
 }
 
+// English is stored only when it differs from the automatic transliteration (js/core/translit.js);
+// otherwise it is left empty and generated, so every person can later correct their own spelling.
+const mismatches = [];
+const biAuto = (ar, en, kind) => {
+  const auto = transliterate(ar, { kind });
+  if (!en || en === auto) return { ar };
+  mismatches.push(`${ar} → auto "${auto}" kept explicit "${en}"`);
+  return { ar, en };
+};
 const bi = (ar, en) => ({ ar, en });
 
 /** Create a person. opts: surname [ar,en], nickname [ar,en], bio [ar,en], needsInfo string. */
 function P(ar, en, gender, opts = {}) {
   const id = makeId('p');
   // «؟» in the notes = name not known → nameStatus "unknown" (the UI shows a polite relational label instead).
-  const p = ar === '؟' ? { id, nameStatus: 'unknown' } : { id, name: bi(ar, en) };
-  if (opts.surname) p.surname = bi(...opts.surname);
-  if (opts.nickname) p.nickname = bi(...opts.nickname);
+  const p = ar === '؟' ? { id, nameStatus: 'unknown' } : { id, name: biAuto(ar, en, 'given') };
+  if (opts.surname) p.surname = biAuto(...opts.surname, 'surname');
+  if (opts.nickname) p.nickname = biAuto(...opts.nickname, 'given');
   if (gender) p.gender = gender;
   if (opts.bio) p.bio = bi(...opts.bio);
   if (opts.needsInfo) { p.tags = ['needs-info']; p.needsInfo = opts.needsInfo; }
@@ -81,7 +91,7 @@ const hassan0 = P('حسن', 'Hassan', 'm', {
   needsInfo: 'أُضيف من الاسم الكامل «محمد حسن سالم عالم» — يُرجى التأكيد وإضافة التفاصيل. Added from the full name; please confirm.',
 });
 U([salem], [hassan0]);
-const head1 = P('محمد', 'Mohammed', 'm', { surname: ['عالم', 'Alem'] });
+const head1 = P('محمد', 'Muhammad', 'm', { surname: ['عالم', 'Alem'] });
 U([hassan0], [head1]);
 
 // Children of محمد حسن سالم عالم (their mother is not named in the notes)
@@ -95,7 +105,7 @@ U([head1], [ahmed1, khadijaBibi, aisha1, maryam1, ali1]);
 // أحمد - خديجة فتة
 {
   const khadijaFatta = P('خديجة', 'Khadija', 'f', { surname: ['فتة', 'Fatta'] });
-  const mohammed = P('محمد', 'Mohammed', 'm');
+  const mohammed = P('محمد', 'Muhammad', 'm');
   const ibrahim = P('ابراهيم', 'Ibrahim', 'm');
   const fatima = P('فاطمة', 'Fatima', 'f');
   const fawzia = P('فوزية', 'Fawzia', 'f');
@@ -119,7 +129,7 @@ U([head1], [ahmed1, khadijaBibi, aisha1, maryam1, ali1]);
 
   // فاطمة - صالح أبوغلية
   M(fatima, P('صالح', 'Saleh', 'm', { surname: ['أبوغلية', 'Abu Ghulia'] }), [
-    P('سليمان', 'Sulaiman', 'm'), P('سمير', 'Samir', 'm'), P('محمد', 'Mohammed', 'm'), P('خالد', 'Khalid', 'm'),
+    P('سليمان', 'Sulaiman', 'm'), P('سمير', 'Samir', 'm'), P('محمد', 'Muhammad', 'm'), P('خالد', 'Khalid', 'm'),
     P('سميرة', 'Samira', 'f'), P('بديعة', 'Badia', 'f'), P('ابتسام', 'Ibtisam', 'f'), P('ناهد', 'Nahid', 'f'),
   ]);
 
@@ -168,15 +178,15 @@ const faiza = P('فايزة', 'Faiza', 'f');
   const awatif = P('عواطف', 'Awatif', 'f');
   M(ali1, faiza, [hassan, hussein, essam, adel, emad, awatif]);
   M(hassan, P('إلهام', 'Ilham', 'f', { surname: ['عزت', 'Ezzat'] }));
-  M(essam, P('سوسن', 'Sawsan', 'f', { surname: ['محمد عيد', 'Mohammed Eid'] }));
+  M(essam, P('سوسن', 'Sawsan', 'f', { surname: ['محمد عيد', 'Muhammad Eid'] }));
   M(essam, P('زلفى', 'Zulfa', 'f', { surname: ['الريس', 'Al-Rayyis'] }));
-  M(emad, P('أماني', 'Amani', 'f', { surname: ['محمود حسين خالد', 'Mahmoud Hussein Khaled'] }));
+  M(emad, P('أماني', 'Amani', 'f', { surname: ['محمود حسين خالد', 'Mahmoud Hussein Khalid'] }));
   M(awatif, P('حسن', 'Hassan', 'm', { surname: ['متولي', 'Metwally'] }));
 }
 
 // ---------------------------------------------------------------------------
 // Family 2 — أبناء محمد علي محمود
-const head2 = P('محمد علي', 'Mohammed Ali', 'm', { surname: ['محمود', 'Mahmoud'] });
+const head2 = P('محمد علي', 'Muhammad Ali', 'm', { surname: ['محمود', 'Mahmoud'] });
 
 // Mothers («الأشقاء» section)
 const wDaghestani = P('؟', '?', 'f', {
@@ -186,7 +196,7 @@ const wDaghestani = P('؟', '?', 'f', {
 const wIhsan = P('إحسان', 'Ihsan', 'f', { surname: ['قنديل', 'Qandil'] });
 const wAlawiya = P('علوية', 'Alawiya', 'f', { surname: ['مراد', 'Murad'] });
 const wAisha = P('عائشة', 'Aisha', 'f');
-const wFatima = P('فاطمة', 'Fatima', 'f', { surname: ['محمد حافظ', 'Mohammed Hafez'] });
+const wFatima = P('فاطمة', 'Fatima', 'f', { surname: ['محمد حافظ', 'Muhammad Hafez'] });
 
 const hussein2 = P('حسين', 'Hussein', 'm');
 const ibrahim2 = P('إبراهيم', 'Ibrahim', 'm', {
@@ -198,7 +208,7 @@ const abdulrahman2 = P('عبدالرحمن', 'Abdulrahman', 'm');
 const abdulaziz2 = P('عبدالعزيز', 'Abdulaziz', 'm');
 const buthaina2 = P('بثينة', 'Buthaina', 'f');
 const asim2 = P('عاصم', 'Asim', 'm');
-const mohammedAli2 = P('محمدعلي', 'Mohammed Ali', 'm');
+const mohammedAli2 = P('محمدعلي', 'Muhammad Ali', 'm');
 
 const uDaghestani = M(head2, wDaghestani, [hussein2]);
 const uIbrahim = U([head2], [ibrahim2]);
@@ -235,12 +245,12 @@ M(wFatima, P('حسين', 'Hussein', 'm', { surname: ['الريس', 'Al-Rayyis'] 
   const hisham = P('هشام', 'Hisham', 'm');
   const basma = P('بسمة', 'Basma', 'f', { nickname: ['ابتسام', 'Ibtisam'] });
   const abeer = P('عبير', 'Abeer', 'f');
-  M(khadija, P('هاشم', 'Hashim', 'm', { surname: ['محمد مكي المرزوقي', 'Mohammed Makki Al-Marzouqi'] }), [samir, wadie, hisham, basma, abeer]);
+  M(khadija, P('هاشم', 'Hashim', 'm', { surname: ['محمد مكي المرزوقي', 'Muhammad Makki Al-Marzouqi'] }), [samir, wadie, hisham, basma, abeer]);
   M(samir, P('ابتسام', 'Ibtisam', 'f', { surname: ['هشام أبو النجا', 'Hisham Abu Al-Naja'], bio: ['عمة إنصاف', "Insaf's paternal aunt"] }));
   M(wadie, P('سلوى', 'Salwa', 'f', { surname: ['دهلوي', 'Dahlawi'] }));
   M(hisham, P('حنان', 'Hanan', 'f', { surname: ['دهلوي', 'Dahlawi'] }));
   M(basma, P('عادل', 'Adel', 'm', { surname: ['حافظ', 'Hafez'] }));
-  M(abeer, P('محمد', 'Mohammed', 'm', { surname: ['آل غالب', 'Al Ghalib'] }));
+  M(abeer, P('محمد', 'Muhammad', 'm', { surname: ['آل غالب', 'Al Ghalib'] }));
 
   // نفيسة - فاروق أحمد جودت
   const sanaa = P('سناء', 'Sanaa', 'f');
@@ -261,10 +271,10 @@ M(wFatima, P('حسين', 'Hussein', 'm', { surname: ['الريس', 'Al-Rayyis'] 
     mahmoud, P('طارق', 'Tariq', 'm'), omaima, sahar, haifa, ruwaida, P('إيمان', 'Eman', 'f'), P('أضواء', 'Adwaa', 'f'),
   ]);
   M(mahmoud, P('مها', 'Maha', 'f', { surname: ['صالح المدني', 'Saleh Al-Madani'] }));
-  M(omaima, P('عمر', 'Omar', 'm', { surname: ['محمد حسين', 'Mohammed Hussein'] }));
-  M(sahar, P('أنور', 'Anwar', 'm', { surname: ['محمد حسين', 'Mohammed Hussein'] }));
+  M(omaima, P('عمر', 'Omar', 'm', { surname: ['محمد حسين', 'Muhammad Hussein'] }));
+  M(sahar, P('أنور', 'Anwar', 'm', { surname: ['محمد حسين', 'Muhammad Hussein'] }));
   M(haifa, P('أحمد', 'Ahmed', 'm', { surname: ['السقاف', 'Al-Saqqaf'] }));
-  M(ruwaida, P('محمد', 'Mohammed', 'm', { surname: ['الركا', 'Al-Raka'] }));
+  M(ruwaida, P('محمد', 'Muhammad', 'm', { surname: ['الركا', 'Al-Raka'] }));
 }
 
 // جميل - سُكَينة (أنوار) حسن حسين منصور ، - نوال محمد عيد
@@ -282,9 +292,9 @@ M(wFatima, P('حسين', 'Hussein', 'm', { surname: ['الريس', 'Al-Rayyis'] 
   M(oyoun, P('موفق', 'Muwaffaq', 'm', { surname: ['عبدالصمد عزت', 'Abdulsamad Ezzat'] }), [
     P('حلى', 'Hala', 'f'), P('فيصل', 'Faisal', 'm'), P('عبد الإله', 'Abdulelah', 'm'),
   ]);
-  M(jamil2, P('نوال', 'Nawal', 'f', { surname: ['محمد عيد', 'Mohammed Eid'] }), [
+  M(jamil2, P('نوال', 'Nawal', 'f', { surname: ['محمد عيد', 'Muhammad Eid'] }), [
     P('نزار', 'Nizar', 'm'), P('مازن', 'Mazen', 'm'), P('حازم', 'Hazem', 'm'), P('ثامر', 'Thamer', 'm'),
-    P('محمد', 'Mohammed', 'm'), P('ابتهال', 'Ibtihal', 'f'),
+    P('محمد', 'Muhammad', 'm'), P('ابتهال', 'Ibtihal', 'f'),
   ]);
 }
 
@@ -297,7 +307,7 @@ M(abdullatif2, P('زبيدة', 'Zubaida', 'f'), [
 ]);
 
 // عبدالرحمن - هناء محمد عاشور
-M(abdulrahman2, P('هناء', 'Hanaa', 'f', { surname: ['محمد عاشور', 'Mohammed Ashour'] }), [
+M(abdulrahman2, P('هناء', 'Hanaa', 'f', { surname: ['محمد عاشور', 'Muhammad Ashour'] }), [
   P('رائد', 'Raed', 'm'), P('رائف', 'Raef', 'm'), P('رشا', 'Rasha', 'f'),
 ]);
 
@@ -307,7 +317,7 @@ M(abdulrahman2, P('هناء', 'Hanaa', 'f', { surname: ['محمد عاشور', '
   M(buthaina2, P('عبدالوهاب', 'Abdulwahab', 'm', { surname: ['حسن شمس', 'Hassan Shams'] }), [
     P('حسن', 'Hassan', 'm'), P('وليد', 'Walid', 'm'), ghaida,
   ]);
-  M(ghaida, P('محمد', 'Mohammed', 'm', { surname: ['سعيد أبوالخير علوي', 'Saeed Abulkhair Alawi'] }), [
+  M(ghaida, P('محمد', 'Muhammad', 'm', { surname: ['سعيد أبوالخير علوي', 'Saeed Abulkhair Alawi'] }), [
     P('سمير', 'Samir', 'm'), P('وديع', 'Wadie', 'm'), P('سعيد', 'Saeed', 'm'), P('ريماز', 'Rimaz', 'f'),
   ]);
 }
@@ -341,3 +351,4 @@ writeFileSync(OUT, JSON.stringify(data, null, 2) + '\n');
 const nPeople = Object.keys(people).length;
 const nUnions = Object.keys(unions).length;
 console.log(`Wrote ${OUT}: ${nPeople} people, ${nUnions} unions.`);
+if (mismatches.length) console.log(`English kept explicitly (differs from auto) for ${mismatches.length}:\n  ` + mismatches.join('\n  '));

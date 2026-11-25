@@ -95,6 +95,12 @@ All site paths are relative. GitHub automation & the issue form only work once m
   "history":    []                             // newest last, max 20: {"issue":12|null,"rev":13,"at":"ISO","action":"add-person","from"?:uid,"index"?:n}
 }
 ```
+* **Auto English** (`js/core/translit.js`): `name.en`, `surname.en`, `nickname.en` are stored ONLY when someone typed or corrected
+  them. When empty, the English spelling is generated from the Arabic (`englishOf(field, kind)`; dictionary of preferred spellings —
+  the owner chose **Muhammad** for محمد — plus compound rules and a letter-based fallback). Every English display (cards, lineage,
+  describe, search index, issue text) uses `englishOf`, never raw Arabic, when the language is English. Forms auto-fill the English
+  field live as Arabic is typed until the user edits it; on save the English value is sent only if it differs from the automatic one.
+  The person page marks automatic spellings subtly ("automatic spelling — correct it") so each person can choose their own.
 * **Compact stored form** (`compactPerson`): drops `""`, empty bilingual objects, `approx:false`, empty arrays, `null`, `deceased:false`,
   `nameStatus:"known"`, `privacy:"full"`; empty `birth`/`death` objects. Always keeps `id`. Key order on write = order above.
   `normalizePerson` restores the full shape. Note: compact drops `privacy:"full"`, so a missing `privacy` means `"full"`.
@@ -262,7 +268,11 @@ normalizeUnion normalizeData compactPerson compactUnion compactData validateData
 `yearsLabel(person, lang)` (e.g. "1950–2010", "b. 1990"/"م 1990", "d. 2010"/"ت 2010" — never a cross). Locales are pinned:
 `ar-u-ca-gregory-nu-latn|nu-arab`, `en-GB-u-ca-gregory`, Hijri via `-u-ca-islamic-umalqura`.
 
-**names.js** — `personName(p, lang)` (given name with fallback to other language) · `displayName(p, lang, graph?)`: known → name (+ " (nickname)");
+**translit.js** (exists) — `transliterate(ar, {kind:"given"|"surname"})`, `englishOf(field, kind)`, `isAutoEnglish(field)`,
+`autoEnglish(person)`, `normalizeForTranslit`.
+
+**names.js** — `personName(p, lang)` (given name; for `en` uses `englishOf(name)` so Arabic-only names get auto English; for `ar` falls
+back to the English text) · `displayName(p, lang, graph?)`: known → name (+ " (nickname)");
 unknown/withheld → nickname, else a polite relational label using graph: wife "زوجة X"/"Wife of X" (withheld wife: "حرم X"), daughter
 "ابنة X" (withheld: "كريمة X"), son "ابن X", unknown gender "أحد أبناء X"/"Child of X", else "غير معروف"/"Unknown"; plus surname
 when present · `fullName(p, lang, graph?)` (displayName + surname verbatim, never adds آل/Al-) · `lineageName(graph, id, lang,
@@ -287,7 +297,7 @@ ties(id) → [{type, person, direction:"to"|"from"}]   milkSiblings(id)
 ancestors(id) → Map<id,depth>   descendants(id) → Map<id,depth> (blood only: unions where the focal person is partner)
 isAncestor(a,b)   branches() → [{person, partner|null, label, count}]   // §4 below   generationDepth(id)
 stats() → {people, living, deceased, unions, generations, branches}
-search(query, {limit:30}) → [{person, score}]   // exact > normalized > skeleton; ar+en name, nickname, surname, lineage tokens
+search(query, {limit:30}) → [{person, score}]   // exact > normalized > skeleton; ar + en (stored OR auto English) name, nickname, surname, lineage tokens
 duplicatesSuspects() → [[a,b,reason]]   recentlyAdded(n) (by history)
 ```
 `branches()`: parentless active people with descendants, none of whose spouses in child-bearing unions has active parents; when both
@@ -463,7 +473,9 @@ Any route with `?rev=N` where N > loaded `meta.revision` shows "Publishing your 
   dependsOn).
 
 ### 7.4 Forms & dialogs (`js/forms/`)
-* `person-form.js`: given-name field labelled "الاسم الأول فقط (مثال: محمد، عبد الله، نور الدين)" with `NAME_LOOKS_FULL` hint offering
+* `person-form.js`: English name/surname/nickname fields auto-fill from the Arabic (translit.js) while untouched (shown with an
+  "automatic" hint); once edited they keep the user's spelling; the value is included only when it differs from the automatic one.
+  Given-name field labelled "الاسم الأول فقط (مثال: محمد، عبد الله، نور الدين)" with `NAME_LOOKS_FULL` hint offering
   to split into given/father/family; Arabic `dir=rtl` and English `dir=ltr` side by side (English optional; a "suggest" transliteration
   button is NOT required); "Name not known" and "Prefer not to publish the name" options (nameStatus) — prefilled from
   `privacyDefaults.femaleNameStatus` for women; surname; nickname (placeholder "أبو خالد، أم خالد، الحاج"); gender as
