@@ -1125,13 +1125,6 @@
         "ar": "محمود"
       },
       "gender": "m",
-      "history": [
-        {
-          "issue": null,
-          "at": "2026-11-25T00:00:00Z",
-          "action": "import"
-        }
-      ],
       "spouseOrder": [
         "ua3cyinn",
         "u5naa4pt",
@@ -1139,6 +1132,13 @@
         "ulw23n2m",
         "ulon6otj",
         "u5g9us92"
+      ],
+      "history": [
+        {
+          "issue": null,
+          "at": "2026-11-25T00:00:00Z",
+          "action": "import"
+        }
       ]
     },
     "pz687fnv": {

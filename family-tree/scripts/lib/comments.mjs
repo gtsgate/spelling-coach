@@ -274,8 +274,9 @@ export function simpleComment(key, params, status = key) {
   return [marker(MARKERS.RESULT, { status }), biPara(key, params)].join('\n\n');
 }
 
-export function approvalNote({ cmd, commentId, by, correction = false }) {
-  return [marker(MARKERS.APPROVAL, { cmd, comment: commentId, by }),
+/** Hidden record of an approval command (the queue re-reads fp/skip/force from the approver's own comment). */
+export function approvalNote({ cmd, commentId, by, fp = null, skip = [], force = false, correction = false }) {
+  return [marker(MARKERS.APPROVAL, { cmd, comment: commentId, by, fp, skip: skip.join(','), force: force ? 1 : 0 }),
     correction ? `✏️ ${bi('correctionReceived')}\n\n👍 ${bi('approvalReceived')}` : `👍 ${bi('approvalReceived')}`].join('\n\n');
 }
 

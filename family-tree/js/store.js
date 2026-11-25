@@ -127,7 +127,8 @@ export const store = {
     try { ledger = await fetchJSON('data/applied.json'); } catch { ledger = {}; }
     const byId = {};
     for (const entry of Object.values(ledger || {})) {
-      if (entry && entry.proposalId) byId[entry.proposalId] = { idMap: entry.idMap || {}, issue: entry.issue ?? null };
+      // Proposals later reverted with /undo no longer resolve their temp refs.
+      if (entry && entry.proposalId && !entry.undone) byId[entry.proposalId] = { idMap: entry.idMap || {}, issue: entry.issue ?? null };
     }
     this.appliedById = byId;
     return byId;

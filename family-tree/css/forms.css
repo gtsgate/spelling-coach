@@ -338,7 +338,7 @@ dialog.dlg .btn .icon-chevronStart { transform: none; }
 /* Dates */
 .form-date { display: flex; flex-direction: column; gap: var(--s2); }
 .form-date-main { display: flex; align-items: stretch; gap: var(--s2); }
-.form-year { inline-size: 8.5em; flex: none; font-size: 1.12rem; font-weight: 600; letter-spacing: .04em; text-align: center; font-variant-numeric: tabular-nums; }
+.form-year { inline-size: auto; flex: 1 1 auto; min-inline-size: 0; max-inline-size: 11em; font-size: 1.12rem; font-weight: 600; letter-spacing: .04em; text-align: center; font-variant-numeric: tabular-nums; }
 .form-cal { inline-size: auto; flex: 0 0 auto; }
 .form-cal > label { min-inline-size: 3.2em; padding-inline: 12px; font-size: 1.02rem; }
 .form-date-detail { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--s2); }
@@ -365,8 +365,7 @@ dialog.dlg .btn .icon-chevronStart { transform: none; }
 .field.has-error .form-input-en.is-auto { border-color: var(--line-strong); }
 
 @media (max-width: 420px) {
-  .form-date-main { flex-wrap: wrap; }
-  .form-year { flex: 1 1 7em; inline-size: auto; }
+  .form-year { max-inline-size: none; }
   .form-ns { flex-direction: column; }
   dialog.dlg .modal-actions .btn { min-inline-size: 0; }
 }

@@ -62,7 +62,7 @@ register({
     'pf.surname': 'Family name',
     'pf.surnameHint': 'As the family writes it, e.g. Alem, Al-Harbi. For someone who married into the family: the rest of their full name.',
     'pf.nickname': 'Nickname or kunya',
-    'pf.nicknamePh': 'Abu Khalid, Umm Khalid, Al-Hajj',
+    'pf.nicknamePh': 'Abu Khalid',
     'pf.nicknameHint': 'Optional — how the family knows them.',
     'pf.life': 'Living or passed away?',
     'pf.living': 'Living',
@@ -334,7 +334,7 @@ export function dateInput({ value = {}, id = uid('date'), withApprox = true, wit
   const changed = () => { if (onChange) onChange(); };
 
   const year = h('input', {
-    id, class: 'input form-year', type: 'text', inputMode: 'numeric', autocomplete: 'off', maxLength: 4, dir: 'ltr',
+    id, class: 'input form-year', type: 'text', inputMode: 'numeric', autocomplete: 'off', maxLength: 4, dir: 'ltr', size: 6,
     attrs: { inputmode: 'numeric', pattern: '[0-9٠-٩۰-۹]*', 'aria-describedby': `${id}-err`, 'aria-labelledby': labelledBy || null },
   });
   year.value = parts.y;
@@ -506,7 +506,11 @@ export function personForm({ mode = 'add', person = null, context = {} } = {}) {
   }
   nameBi.ar.addEventListener('blur', checkFullName);
   nameBi.en.addEventListener('blur', checkFullName);
-  nameBi.ar.addEventListener('input', () => { nameField.setError(''); if (!fullNameBox.hidden) checkFullName(); });
+  // Checked while typing (debounced) so the hint does not push the next field away at the moment of a tap.
+  let fullTimer = null;
+  const checkSoon = () => { clearTimeout(fullTimer); fullTimer = setTimeout(checkFullName, 650); };
+  nameBi.ar.addEventListener('input', () => { nameField.setError(''); checkSoon(); });
+  nameBi.en.addEventListener('input', checkSoon);
 
   // --- gender ------------------------------------------------------------------------------------------
   const genderLabelId = uid('gender');

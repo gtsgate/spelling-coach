@@ -167,7 +167,7 @@ describe('apply: approvals', () => {
     const { fp } = await hashProposal(p);
     let s = await keeperSays(gh, ctx, n, `/approve ${fp}`);
     assert.equal(s.command.action, 'needs-deletion-approval');
-    assert.equal(s.queue, null);
+    assert.deepEqual(s.queue.applied, []);
     assert.match(lastBot(gh, n), /The deletion approval is needed/);
     // the label route is gated in the queue
     gh.userLabel(n, 'approve', KEEPER);
@@ -287,6 +287,25 @@ describe('apply: approvals', () => {
     assert.match(log[0], new RegExp(`apply #${newer}, #${older}`));
     const msg = sh(portal.work, 'log', '-1', '--format=%B');
     assert.equal((msg.match(/^Gft-Apply:/gm) || []).length, 2);
+  });
+
+  test('a command whose run was cancelled (no bot reply) is answered by the next run', async () => {
+    const portal = newPortal();
+    const gh = fakeGitHub();
+    const ctx = makeCtx(portal, gh);
+    const p = proposal([P.addChild('pahmed01', 'يوسف')]);
+    const n = await submitted(gh, ctx, p);
+    gh.userComment(n, KEEPER, `/approve ${(await hashProposal(p)).fp}`);
+    gh.userComment(n, 'relative', 'thank you!');
+    const r = await submitted(gh, ctx, proposal([P.addChild('pmona001', 'ليلى')]));
+    gh.userComment(r, KEEPER, '/reject');
+    gh.userComment(r, 'cousin', '/approve'); // not an approver: never swept
+    const s = await runApply(ctx, { eventName: 'schedule', event: {} });
+    assert.deepEqual(s.swept, [n, r]);
+    assert.deepEqual(s.queue.applied, [n]);
+    assert.equal(issueOf(gh, r).state_reason, 'not_planned');
+    const again = await runApply(ctx, { eventName: 'schedule', event: {} });
+    assert.deepEqual(again.swept, []);
   });
 
   test('/reject posts the fixed thank-you text and closes as not planned', async () => {

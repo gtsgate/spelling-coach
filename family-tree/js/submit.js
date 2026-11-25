@@ -8,7 +8,7 @@
 //     github:   { url, fits, body },                       // !fits → copy `body` (the code), the form opens without it
 //     email:    { url } | null,                            // only when config.owner.email is set
 //     approveIssueUrl, approve: { url, fits },             // owner: issue form pre-labelled family-tree + approve(-deletion)
-//     approvalComment,                                     // "/approve\n" + code (owner correction of an open request)
+//     approvalComment,                                     // "/approve <fp>\n" + code ("/approve-deletion <fp>" when destructive)
 //   }
 //
 // Pure apart from reading store.config by default (pass `config` to use it without the store, e.g. in tests).
@@ -123,9 +123,12 @@ export function issueUrl({ title = '', code = '', submitter = '', note = '', lab
   return { url: make([['title', short]]), fits: false };
 }
 
-/** The owner's correction comment for an open request. */
-export function approvalComment(code) {
-  return `/approve\n${code}`;
+/**
+ * The owner's correction comment for an open request: "/approve <fp>" (or "/approve-deletion <fp>" when the proposal is
+ * destructive, incl. a REPARENT found by a dry run), then the corrected code on its own line.
+ */
+export function approvalComment(code, { destructive = false, fp = '' } = {}) {
+  return `/${destructive ? 'approve-deletion' : 'approve'}${fp ? ` ${fp}` : ''}\n${code}`;
 }
 
 /** Whole-proposal summary in a language (describe.js against `graph`, the data the proposal applies to). */
@@ -180,7 +183,7 @@ export async function buildSubmission(proposal, { graph = null, lang = 'ar', des
     email,
     approveIssueUrl: approve.url,
     approve,
-    approvalComment: approvalComment(theCode),
+    approvalComment: approvalComment(theCode, { destructive: isDestr, fp: hash.slice(0, 6) }),
   };
 }
 

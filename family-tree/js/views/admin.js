@@ -233,8 +233,8 @@ const MSG = {
   familyEn: (name) => `Family of ${name}:`,
   othersAr: 'أفراد آخرون:',
   othersEn: 'Others:',
-  updatesAr: (n) => `وأُجريت تحديثات وتصحيحات أخرى (العدد: ${n}).`,
-  updatesEn: (n) => `Plus ${n} other ${n === 1 ? 'update' : 'updates'} and corrections.`,
+  updatesAr: (n) => `عدد التحديثات المعتمدة هذا الأسبوع: ${n}.`,
+  updatesEn: (n) => `${n} ${n === 1 ? 'update was' : 'updates were'} approved this week.`,
   invitesAr: 'شجرة العائلة — نرحّب بإضافاتكم وتصحيحاتكم:',
   invitesEn: 'The family tree — additions and corrections are welcome:',
 };

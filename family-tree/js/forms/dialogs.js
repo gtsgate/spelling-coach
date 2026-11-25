@@ -169,7 +169,7 @@ register({
     // link existing
     'dlg.link': 'Link a person already in the tree',
     'dlg.linkLead': 'For someone who is already in the tree but not yet connected to {name}.',
-    'dlg.linkAs': '{name} is their…',
+    'dlg.linkAs': 'This person is {name}’s…',
     'dlg.linkAs.spouse': 'Husband or wife',
     'dlg.linkAs.child': 'Son or daughter',
     'dlg.linkAs.parent': 'Father or mother',
@@ -190,7 +190,7 @@ register({
     'dlg.mergeParentsOf': 'The parents of this record: {names}',
     'dlg.mergeNew': 'Only records that are already approved can be merged.',
     'dlg.mergeRequired': 'Please choose the duplicate record.',
-    'dlg.mergeStats': '{p} parents · {s} spouses · {c} children',
+    'dlg.mergeStats': 'Parents: {p} · Spouses: {s} · Children: {c}',
     // removal
     'dlg.remove': 'Request removal',
     'dlg.removeLead': 'Removal hides {name} from the tree. It can be restored later, and it needs the owner’s separate approval.',
@@ -377,7 +377,7 @@ register({
     'dlg.needOneParent': 'يُرجى اختيار أحد الوالدين على الأقل.',
     'dlg.link': 'ربط شخص موجود في الشجرة',
     'dlg.linkLead': 'لشخص مسجّل في الشجرة لكنه غير مرتبط بعدُ بـ{name}.',
-    'dlg.linkAs': 'صلته بـ{name}:',
+    'dlg.linkAs': 'ما صلة هذا الشخص بـ{name}؟',
     'dlg.linkAs.spouse': 'زوج أو زوجة',
     'dlg.linkAs.child': 'ابن أو ابنة',
     'dlg.linkAs.parent': 'والد أو والدة',
@@ -465,8 +465,10 @@ const genderKey = (p) => (p?.gender === 'm' || p?.gender === 'f' ? p.gender : 'u
 /** Warnings that never need the visitor's attention. */
 const SILENT = new Set(['MERGED_REDIRECT', 'ORDER_IGNORED', 'UNKNOWN_FIELD', 'GENDER_MISSING']);
 
+let dismissLastToast = null;
 function toastAdded() {
-  toast(t('common.addedToDraft'), { type: 'success', timeout: 7000, action: { label: t('common.viewDraft'), href: '#/draft' } });
+  if (dismissLastToast) dismissLastToast();
+  dismissLastToast = toast(t('common.addedToDraft'), { type: 'success', timeout: 7000, action: { label: t('common.viewDraft'), href: '#/draft' } });
 }
 
 function safeRefNames(proposal) {

@@ -85,6 +85,7 @@
 - **«تلزم موافقة الحذف»:** المقترح يحذف أو يدمج أو يغيّر الوالدين؛ يُستخدم `/approve-deletion` مع البصمة.
 - **«تعذّر حفظ التحديث… ستُعاد المحاولة تلقائياً»:** حدث تحديث آخر في الوقت نفسه؛ يعيد الروبوت المحاولة كل 6 ساعات، أو فوراً من Actions ← «Family tree · apply approved proposals» ← Run workflow.
 - **الموقع لم يتحدّث:** التحقق من إعداد Pages، والانتظار بضع دقائق؛ روابط `?rev=` تنتظر النشر تلقائياً.
+- **أمر بلا رد:** يجيب الروبوت في كل تشغيل لاحق على أوامر المشرف التي لم يرد عليها (عدا `/undo`)؛ وإذا لم يرد على `/undo` خلال دقائق، يكفي إرساله مرة أخرى.
 - **تشغيل تجريبي دون أي تغيير:** Actions ← «Family tree · apply approved proposals» ← Run workflow مع خيار `dry_run`.
 
 </div>
@@ -174,6 +175,7 @@ To ignore a proposal without replying, just close it.
 - **“The deletion approval is needed”:** the proposal removes, merges or re-parents people — use `/approve-deletion` with the fingerprint.
 - **“…will be retried automatically”:** another update happened at the same moment; the queue runs again every 6 hours, or immediately via Actions → *Family tree · apply approved proposals* → *Run workflow*.
 - **Site not updated:** check the Pages settings and wait a few minutes; `?rev=` links wait for publication on their own.
+- **A command got no reply:** every later run answers approver commands that never got a reply (except `/undo`); if `/undo` gets no reply within a few minutes, post it again.
 - **Try without changing anything:** Actions → *Family tree · apply approved proposals* → *Run workflow* with `dry_run` ticked.
 
 ### For maintainers

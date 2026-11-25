@@ -569,17 +569,17 @@ function aboutCard() {
   const g = store.working;
   const mePerson = s.personId ? g.person(s.personId) : null;
   const nameInput = h('input', {
-    id: 'draft-name', class: 'input', type: 'text', autocomplete: 'name', maxLength: LIMITS.name,
+    id: 'draft-name', class: 'input', type: 'text', dir: 'auto', autocomplete: 'name', maxLength: LIMITS.name,
     placeholder: t('draft.namePh'), value: s.name || '',
     on: { input: (e) => { store.setSubmitter({ name: e.target.value }); rebuildSoon(); } },
   });
   const relInput = h('input', {
-    id: 'draft-relation', class: 'input', type: 'text', maxLength: 300,
+    id: 'draft-relation', class: 'input', type: 'text', dir: 'auto', maxLength: 300,
     placeholder: t('draft.relationPh'), value: s.relation || '',
     on: { input: (e) => { store.setSubmitter({ relation: e.target.value }); rebuildSoon(); } },
   });
   const note = h('textarea', {
-    id: 'draft-note', class: 'textarea', rows: 3, maxLength: LIMITS.proposalNote,
+    id: 'draft-note', class: 'textarea', rows: 3, dir: 'auto', maxLength: LIMITS.proposalNote,
     placeholder: t('draft.notePh'), value: store.draft.note || '',
     on: { input: (e) => { store.setNote(e.target.value); rebuildSoon(); } },
   });

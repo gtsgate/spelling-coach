@@ -20,6 +20,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { transliterate } from '../js/core/translit.js';
+import { normalizeData, serializeData } from '../js/core/schema.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outArg = process.argv.indexOf('--out');
@@ -347,7 +348,7 @@ const data = {
   unions,
 };
 
-writeFileSync(OUT, JSON.stringify(data, null, 2) + '\n');
+writeFileSync(OUT, serializeData(normalizeData(data)));
 const nPeople = Object.keys(people).length;
 const nUnions = Object.keys(unions).length;
 console.log(`Wrote ${OUT}: ${nPeople} people, ${nUnions} unions.`);

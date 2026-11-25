@@ -125,7 +125,13 @@ describe('submit: GitHub issue form', () => {
     assert.ok(d.title.startsWith('⚠️ 🌳 '));
     assert.ok([...issueTitle('x'.repeat(300))].length <= 120);
     assert.equal(approvalComment('GFT1:abc.1'), '/approve\nGFT1:abc.1');
-    assert.equal(s.approvalComment, `/approve\n${s.code}`);
+    assert.equal(approvalComment('GFT1:abc.1', { destructive: true, fp: 'a1b2c3' }), '/approve-deletion a1b2c3\nGFT1:abc.1');
+    assert.equal(s.approvalComment, `/approve ${s.fp}\n${s.code}`);
+    assert.equal(d.approvalComment, `/approve-deletion ${d.fp}\n${d.code}`);
+    const rm = proposal(0);
+    rm.ops = [{ op: 'remove-person', id: anyMan, reasonCode: 'duplicate' }];
+    const r = await buildSubmission(rm, { graph, lang: 'en', config: CONFIG });
+    assert.ok(r.approvalComment.startsWith(`/approve-deletion ${r.fp}\n`));
   });
 
   test('e-mail only when configured', async () => {

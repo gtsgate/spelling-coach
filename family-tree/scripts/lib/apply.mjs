@@ -51,19 +51,13 @@ async function isProposalIssue(issue) {
 // Entry point
 
 export async function runApply(ctx, { eventName, event = {} }) {
-  const summary = { event: eventName, command: null, queue: null };
-  let runQueue = false;
-  let only = null;
-  if (eventName === 'issue_comment') {
-    summary.command = await handleComment(ctx, event);
-    runQueue = !!summary.command.runQueue;
-  } else if (eventName === 'issues' || eventName === 'schedule') {
-    runQueue = true;
-  } else if (eventName === 'workflow_dispatch') {
-    runQueue = true;
-    only = Number(event.inputs?.issue) || null;
-  }
-  if (runQueue) summary.queue = await processQueue(ctx, { only });
+  const summary = { event: eventName, command: null, swept: [], queue: null };
+  if (eventName === 'issue_comment') summary.command = await handleComment(ctx, event);
+  // A pending run can be cancelled by a newer one (GitHub keeps one pending run per concurrency group), so every run
+  // also answers approver commands that never got a reply, then processes the whole queue.
+  summary.swept = await sweepMissedCommands(ctx);
+  const only = eventName === 'workflow_dispatch' ? Number(event.inputs?.issue) || null : null;
+  summary.queue = await processQueue(ctx, { only });
   return summary;
 }
 
@@ -82,6 +76,13 @@ export async function handleComment(ctx, event) {
   if (!cmd) return { action: 'ignored', reason: 'not-a-command' };
   const issue = await gh.getIssue(n);
   if (issue.pull_request) return { action: 'ignored', reason: 'pull-request' };
+  return handleCommand(ctx, issue, comment, cmd);
+}
+
+/** Run one parsed command of a comment on an issue (authorization included). */
+export async function handleCommand(ctx, issue, comment, cmd) {
+  const { gh } = ctx;
+  const n = issue.number;
   if (!(await isProposalIssue(issue))) return { action: 'ignored', reason: 'not-a-proposal' };
   const actor = comment.user?.login || '';
   if (!isApprover(actor, ctx.approvers)) {
@@ -91,6 +92,36 @@ export async function handleComment(ctx, event) {
   if (cmd.cmd === 'reject') return rejectIssue(ctx, issue);
   if (cmd.cmd === 'undo') return undoIssue(ctx, issue, actor);
   return approveCommand(ctx, issue, comment, cmd);
+}
+
+/**
+ * Approver commands (approve / approve-deletion / correct / reject) on open proposals that the bot never answered —
+ * i.e. no bot comment after them — are handled now. → issue numbers handled.
+ */
+export async function sweepMissedCommands(ctx, { max = 30 } = {}) {
+  const { gh } = ctx;
+  const handled = [];
+  const open = (await gh.listIssues({ state: 'open', labels: LABELS.FAMILY_TREE })).filter((i) => !hasLabel(i, LABELS.APPLIED));
+  for (const listed of open.slice(0, max)) {
+    try {
+      const comments = await gh.listComments(listed.number);
+      let pending = null;
+      for (let i = comments.length - 1; i >= 0; i--) {
+        const c = comments[i];
+        if (c.user?.login === ctx.botLogin) break;
+        const cmd = parseCommand(c.body);
+        if (cmd && cmd.cmd !== 'undo' && isApprover(c.user?.login, ctx.approvers)) { pending = { c, cmd }; break; }
+      }
+      if (!pending) continue;
+      ctx.log(`#${listed.number}: answering a command that got no reply (comment ${pending.c.id})`);
+      const issue = await gh.getIssue(listed.number);
+      await handleCommand(ctx, issue, pending.c, pending.cmd);
+      handled.push(listed.number);
+    } catch (e) {
+      ctx.log(`#${listed.number}: sweep failed: ${e.message}`);
+    }
+  }
+  return handled;
 }
 
 async function approveCommand(ctx, issue, comment, cmd) {
@@ -129,7 +160,9 @@ async function approveCommand(ctx, issue, comment, cmd) {
     if (hasLabel(issue, LABELS.APPROVE)) await gh.removeLabel(n, LABELS.APPROVE);
     return { action: 'needs-deletion-approval', hash: check.hash };
   }
-  await gh.createComment(n, approvalNote({ cmd: label, commentId: comment.id, by: comment.user?.login, correction: !!correction }));
+  await gh.createComment(n, approvalNote({
+    cmd: label, commentId: comment.id, by: comment.user?.login, fp: cmd.fp, skip: cmd.skipShown, force: cmd.force, correction: !!correction,
+  }));
   // Re-add the label so the newest "labeled" event is the bot's (it then points at this comment).
   if (hasLabel(issue, label)) await gh.removeLabel(n, label);
   await gh.addLabels(n, [label]);
