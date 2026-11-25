@@ -438,6 +438,7 @@ async function moreOption(page, label) {
 /** Radios in dialogs are styled labels: click the label that wraps the input. */
 async function pickRadio(page, value) {
   await page.locator(`dialog.modal[open] label:has(input[type="radio"][value="${value}"])`).first().click();
+  await page.waitForTimeout(200); // highlight transition
   check(await page.locator(`dialog.modal[open] input[type="radio"][value="${value}"]`).first().isChecked(), 'dialogs', `radio ${value} not checked`);
 }
 const primaryAction = (page) => page.locator('dialog.modal[open] .modal-actions .btn-primary').last();
@@ -499,13 +500,42 @@ flow('person-page dialogs (en, 360px)', async (browser) => {
   await page.click('dialog.modal[open] .modal-close');
   await modalClosed(page);
   check((await draftOps(page)).length === 3, W, 'blocked removal changed the draft');
-  // (5) the draft page lists the three changes; send via "copy code"
+  // (5) add a FORMER wife (new person) — the union is recorded as divorced
+  await page.click('.person-btn-add');
+  await modalOpen(page);
+  await page.click('dialog.modal[open] .dlg-tile-spouse');
+  await page.waitForSelector('dialog.dlg-add-spouse[open] .dlg-new-person');
+  await page.click('dialog.modal[open] .dlg-new-person');
+  await page.locator('dialog.modal[open] input.form-input-ar[id$="-name"]').fill('ميسون');
+  if (await page.locator('dialog.modal[open] label:has(input[type="radio"][value="f"])').count()) await pickRadio(page, 'f');
+  await pickRadio(page, 'former');
+  await shot(page, 'dialogs-6-former-wife');
+  await primaryAction(page).click();
+  await modalClosed(page);
+  ops = await draftOps(page);
+  const spouseOp = ops[3];
+  check(ops.length === 4 && spouseOp.op === 'add-person' && spouseOp.link?.as === 'spouse' && spouseOp.link?.status === 'divorced', W, `former spouse produced ${JSON.stringify(spouseOp)}`);
+  // (6) marriage details of an existing marriage → edit-union with "before"
+  await load(page, `#/p/${WIZ_FATHER}`);
+  await page.locator('.person-marriage-btn').first().click();
+  await page.waitForSelector('dialog.dlg-marriage[open]');
+  await page.waitForTimeout(250);
+  await page.locator('dialog.modal[open] input.form-year').first().fill('1985');
+  await shot(page, 'dialogs-7-marriage');
+  await primaryAction(page).click();
+  await modalClosed(page);
+  ops = await draftOps(page);
+  const mOp = ops[4];
+  check(ops.length === 5 && mOp.op === 'edit-union' && mOp.set?.['marriage.date'] === '1985' && mOp.before?.['marriage.date'] === '', W, `marriage details produced ${JSON.stringify(mOp)}`);
+  await settle(page);
+  check(/1985/.test(await page.locator('.person-sec-spouses').innerText()), W, 'marriage year not shown on the person page');
+  // (7) the draft page lists the five changes; send via "copy code"
   await load(page, '#/draft');
-  check((await page.locator('.draft-changes .draft-ops li').count()) === 3, W, 'draft does not list 3 changes');
+  check((await page.locator('.draft-changes .draft-ops li').count()) === 5, W, 'draft does not list 5 changes');
   await page.check('#draft-ack');
   await page.locator('details.draft-other > summary').click();
   await page.waitForFunction(() => !document.querySelector('button.draft-way')?.disabled, null, { timeout: 10000 });
-  await shot(page, 'dialogs-6-draft');
+  await shot(page, 'dialogs-8-draft');
   const draftId = await page.evaluate(() => globalThis.__gft.draft.id);
   await page.locator('button.draft-way').click();
   await page.waitForFunction(() => globalThis.__gft.sent.length === 1 && globalThis.__gft.draft.ops.length === 0, null, { timeout: 5000 });
@@ -513,17 +543,17 @@ flow('person-page dialogs (en, 360px)', async (browser) => {
   const clip = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''));
   check(/^GFT[01]:/.test(clip), W, `clipboard holds ${clip.slice(0, 20)}`);
   check(await page.locator('.draft-thanks').count() === 1, W, 'no thank-you card after sending');
-  await shot(page, 'dialogs-7-sent');
+  await shot(page, 'dialogs-9-sent');
   const sent = await page.evaluate(() => globalThis.__gft.sent[0]);
   check(sent.id === draftId && sent.via === 'copy', W, `sent entry ${sent.id}/${sent.via}`);
   if (clip) {
     const decoded = await decodeProposal(clip);
-    check(decoded.id === draftId && decoded.ops.length === 3, W, 'copied code does not decode to the draft');
+    check(decoded.id === draftId && decoded.ops.length === 5, W, 'copied code does not decode to the draft');
   }
   // #/me shows it as sent
   await load(page, '#/me');
   check(await page.locator('.me-prop-sent').count() === 1, W, '#/me does not list the sent proposal');
-  await shot(page, 'dialogs-8-me');
+  await shot(page, 'dialogs-10-me');
   problemsOf(W, problems);
   SENT_STATE = { context, page, sent, problems };
 });
@@ -590,7 +620,7 @@ flow('admin paste → preview ✅ → approve-issue URL (ar, 1280px)', async (br
   const problems = watch(page);
   const { code } = await sampleCode();
   await load(page, '#/admin');
-  const message = `السلام عليكم\nهذه تعديلاتي\n\nرمز التعديلات — لا تغيّره / Change code — do not edit\n\`\`\`\n${code}\n\`\`\``;
+  const message = `السلام عليكم\nهذه تعديلاتي\n\nرمز التعديلات — يُرجى عدم تغييره / Change code — do not edit\n\`\`\`\n${code}\n\`\`\``;
   await page.fill('#admin-paste', message);
   await page.locator('.admin-section .btn-primary', { hasText: 'معاينة' }).first().click();
   await page.waitForSelector('.preview-status', { timeout: 10000 });

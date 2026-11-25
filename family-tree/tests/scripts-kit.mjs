@@ -111,7 +111,8 @@ export function makeCtx(portal, gh, over = {}) {
   });
 }
 
-export const fakeGitHub = (seed) => createFakeGitHub(seed);
+/** A fake GitHub whose clock starts at the context clock (issue timestamps are compared with ctx.now()). */
+export const fakeGitHub = (seed) => createFakeGitHub({ start: new Date(clock).toISOString(), ...seed });
 
 let seq = 0;
 export function proposal(ops, extra = {}) {

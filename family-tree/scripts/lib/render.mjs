@@ -44,6 +44,33 @@ export function marker(kind, fields = {}) {
   return `<!-- gft-bot:${kind}${parts.length ? ` ${parts.join(' ')}` : ''} -->`;
 }
 
+/**
+ * Mark a bot comment as the reply to one comment: " for=<id>" is added to its first gft-bot marker (a result marker
+ * is prepended when it has none). The apply sweep counts an owner command as answered only when a bot comment names
+ * its id this way, so a reply to someone else can never hide it. `id` "-" = a bot comment that answers no command.
+ */
+export function tagFor(body, id) {
+  const v = String(id ?? '-').replace(/[^A-Za-z0-9_-]/g, '') || '-';
+  const s = String(body ?? '');
+  const re = /<!-- gft-bot:([a-z]+)((?: [A-Za-z0-9_]+=[^\s>]*)*) -->/;
+  if (!re.test(s)) return `${marker('result', { for: v })}\n\n${s}`;
+  return s.replace(re, (m, kind, rest) => `<!-- gft-bot:${kind}${rest.replace(/ for=[^\s>]*/g, '')} for=${v} -->`);
+}
+
+/** Every gft-bot marker of a body → [{kind, fields}] */
+export function allMarkers(body) {
+  const out = [];
+  for (const m of String(body ?? '').matchAll(/<!-- gft-bot:([a-z]+)((?: [A-Za-z0-9_]+=[^\s>]*)*) -->/g)) {
+    const fields = {};
+    for (const part of m[2].trim().split(/\s+/).filter(Boolean)) {
+      const i = part.indexOf('=');
+      fields[part.slice(0, i)] = part.slice(i + 1);
+    }
+    out.push({ kind: m[1], fields });
+  }
+  return out;
+}
+
 /** Parse the first marker of `kind` in a body → {k: v} or null. */
 export function parseMarker(body, kind) {
   const m = new RegExp(`<!-- gft-bot:${kind}((?: [A-Za-z0-9_]+=[^\\s>]*)*) -->`).exec(String(body ?? ''));

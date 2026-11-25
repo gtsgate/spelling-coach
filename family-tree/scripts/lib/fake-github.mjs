@@ -4,6 +4,7 @@
 //
 //   const gh = createFakeGitHub({issues, comments: {n: […]}, events: {n: […]}, labels, pages, releases})
 //   Simulate people:  gh.userComment(n, login, body) · gh.userLabel(n, name, login) · gh.userOpen({…}) · gh.userEdit(n, body)
+//                     gh.userEditComment(id, body) · gh.userClose(n)
 
 import { BOT_LOGIN } from './labels.mjs';
 
@@ -26,8 +27,9 @@ export function createFakeGitHub(seed = {}) {
   const labelObjs = (names) => names.map((name) => ({ name }));
 
   for (const i of seed.issues || []) {
+    const created = tick();
     state.issues.set(i.number, {
-      state: 'open', title: '', body: '', created_at: tick(), user: { login: 'someone' }, ...clone(i),
+      state: 'open', title: '', body: '', created_at: created, updated_at: created, user: { login: 'someone' }, ...clone(i),
       labels: labelObjs((i.labels || []).map((l) => (typeof l === 'string' ? l : l.name))),
     });
   }
@@ -44,23 +46,27 @@ export function createFakeGitHub(seed = {}) {
   const commentsOf = (n) => { if (!state.comments.has(Number(n))) state.comments.set(Number(n), []); return state.comments.get(Number(n)); };
   const eventsOf = (n) => { if (!state.events.has(Number(n))) state.events.set(Number(n), []); return state.events.get(Number(n)); };
   const record = (method, ...args) => calls.push({ method, args: clone(args) });
+  /** GitHub moves an issue's updated_at on comments, label changes, edits and state changes. */
+  const touch = (i) => { i.updated_at = tick(); };
 
   function addLabel(n, name, actor) {
     const i = issue(n);
     state.labels.add(name);
-    if (!i.labels.some((l) => l.name === name)) i.labels.push({ name });
+    if (!i.labels.some((l) => l.name === name)) { i.labels.push({ name }); touch(i); }
     eventsOf(n).push({ event: 'labeled', label: { name }, actor: { login: actor }, created_at: tick() });
   }
   function dropLabel(n, name, actor) {
     const i = issue(n);
     const before = i.labels.length;
     i.labels = i.labels.filter((l) => l.name !== name);
+    if (i.labels.length !== before) touch(i);
     if (i.labels.length !== before) eventsOf(n).push({ event: 'unlabeled', label: { name }, actor: { login: actor }, created_at: tick() });
   }
   function addComment(n, login, body) {
-    issue(n);
+    const i = issue(n);
     const c = { id: nextId++, body, user: { login }, created_at: tick(), updated_at: null };
     commentsOf(n).push(c);
+    touch(i);
     return c;
   }
 
@@ -77,12 +83,21 @@ export function createFakeGitHub(seed = {}) {
     userUnlabel: (n, name, login) => dropLabel(n, name, login),
     userOpen({ number, title = '', body = '', login = 'relative', labels = [] }) {
       const n = number ?? Math.max(0, ...state.issues.keys()) + 1;
-      state.issues.set(n, { number: n, title, body, state: 'open', created_at: tick(), user: { login }, labels: [] });
+      const created = tick();
+      state.issues.set(n, { number: n, title, body, state: 'open', created_at: created, updated_at: created, user: { login }, labels: [] });
       for (const l of labels) addLabel(n, l, login);
       return n;
     },
-    userEdit(n, body) { issue(n).body = body; },
-    userClose(n) { issue(n).state = 'closed'; },
+    userEdit(n, body) { const i = issue(n); i.body = body; touch(i); },
+    /** Someone edits their own comment (no workflow runs for comment edits). */
+    userEditComment(id, body) {
+      for (const list of state.comments.values()) {
+        const c = list.find((x) => x.id === Number(id));
+        if (c) { c.body = body; c.updated_at = tick(); return clone(c); }
+      }
+      throw new Error(`comment ${id} not found`);
+    },
+    userClose(n) { const i = issue(n); i.state = 'closed'; touch(i); },
     commentsOf: (n) => clone(commentsOf(n)),
     botComments: (n) => clone(commentsOf(n).filter((c) => c.user.login === BOT_LOGIN)),
     labelsOf: (n) => issue(n).labels.map((l) => l.name),
@@ -90,11 +105,12 @@ export function createFakeGitHub(seed = {}) {
     // --- the client interface ---
     async getRepo() { return { default_branch: seed.defaultBranch || 'main' }; },
     async getIssue(n) { return clone(issue(n)); },
-    async listIssues({ state: st = 'open', labels } = {}) {
+    async listIssues({ state: st = 'open', labels, since } = {}) {
       const want = labels ? String(labels).split(',').filter(Boolean) : [];
       return clone([...state.issues.values()]
         .filter((i) => !i.pull_request && (st === 'all' || i.state === st))
         .filter((i) => want.every((w) => i.labels.some((l) => l.name === w)))
+        .filter((i) => !since || String(i.updated_at || i.created_at || '') >= String(since))
         .sort((a, b) => a.number - b.number));
     },
     async listComments(n) { return clone(commentsOf(n)); },
@@ -127,6 +143,7 @@ export function createFakeGitHub(seed = {}) {
       const i = issue(n);
       i.state = 'closed';
       i.state_reason = reason;
+      touch(i);
       return clone(i);
     },
     async listIssueEvents(n) { return clone(eventsOf(n)); },

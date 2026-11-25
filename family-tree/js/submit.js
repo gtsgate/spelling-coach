@@ -13,7 +13,7 @@
 //
 // Pure apart from reading store.config by default (pass `config` to use it without the store, e.g. in tests).
 import { encodeProposal } from './core/codec.js';
-import { proposalHash, isDestructive } from './core/ops.js';
+import { proposalHash, isDestructive, fingerprintOf } from './core/ops.js';
 import { describeProposal } from './core/describe.js';
 import { LIMITS } from './core/schema.js';
 import { store } from './store.js';
@@ -23,7 +23,7 @@ export const GITHUB_URL_MAX = 7500;
 export const ISSUE_TITLE_MAX = 120;
 export const WHATSAPP_LINES = 10;
 export const ISSUE_TEMPLATE = 'family-tree-proposal.yml';
-export const CODE_LABEL = 'رمز التعديلات — لا تغيّره / Change code — do not edit';
+export const CODE_LABEL = 'رمز التعديلات — يُرجى عدم تغييره / Change code — do not edit';
 
 const TXT = {
   ar: {
@@ -171,7 +171,7 @@ export async function buildSubmission(proposal, { graph = null, lang = 'ar', des
   return {
     code: theCode,
     hash,
-    fp: hash.slice(0, 6),
+    fp: fingerprintOf(hash),
     title,
     summaryTitle: summary.title,
     lines: summary.lines,
@@ -183,7 +183,7 @@ export async function buildSubmission(proposal, { graph = null, lang = 'ar', des
     email,
     approveIssueUrl: approve.url,
     approve,
-    approvalComment: approvalComment(theCode, { destructive: isDestr, fp: hash.slice(0, 6) }),
+    approvalComment: approvalComment(theCode, { destructive: isDestr, fp: fingerprintOf(hash) }),
   };
 }
 

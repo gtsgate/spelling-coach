@@ -2,12 +2,14 @@
 //
 //   planUndo({git, rel, data, changelog, applied, number, actor, now}) →
 //     {ok: true, data, changelog, applied, rev, entry, restored: {people, unions}, deleted: {people, unions}, message}
-//     {ok: false, reason: "nothing" | "already" | "no-commit" | "changed" | "invalid", records?, errors?}
+//     {ok: false, reason: "nothing" | "already" | "no-commit" | "changed" | "invalid", records?, siblings?, errors?}
 //
 // The changelog entry's `commit` (filled from the commit trailers when empty) gives the versions before (`<commit>^`)
 // and after (`<commit>`). Only records listed in the entry's `touched` are considered (batch commits hold several
-// proposals). A record is restored only if its current version equals the version of that commit and no later
-// proposal of the same batch touched it; otherwise the undo is refused and those records are listed.
+// proposals). A record is restored only if its current version equals the version of that commit and NO other
+// proposal of the same batch commit (earlier or later in it) touched it — `<commit>^` is the state before the whole
+// batch, so restoring a shared record would also erase the other proposal's change. Otherwise the undo is refused and
+// those records are listed (records: [{kind, id, siblings?: [issue]}], siblings: the batch issues involved).
 
 import { normalizeData, validateData, emptyData } from '../../js/core/schema.js';
 import { canonicalJSON } from '../../js/core/ops.js';
@@ -31,12 +33,18 @@ export function planUndo({ git, rel, data, changelog, applied, number, actor = '
   const after = normalizeData(JSON.parse(afterText));
   const cur = normalizeData(data);
 
-  // Later proposals in the same commit (a batch) that touched the same records block their undo.
-  const laterSiblings = entries.slice(0, idx).filter((e) => e && e.commit === commit && (e.action || 'apply') === 'apply');
-  const blocked = { people: new Set(), unions: new Set() };
-  for (const s of laterSiblings) {
-    for (const id of s.touched?.people || []) blocked.people.add(id);
-    for (const id of s.touched?.unions || []) blocked.unions.add(id);
+  // Every OTHER proposal of the same commit (a batch, before or after this one in it) that touched the same records
+  // blocks their undo.
+  const siblings = entries.filter((e, i) => i !== idx && e && e.commit === commit && (e.action || 'apply') === 'apply'
+    && Number(e.issue) !== Number(number));
+  const blocked = { people: new Map(), unions: new Map() };
+  for (const s of siblings) {
+    for (const k of ['people', 'unions']) {
+      for (const id of s.touched?.[k] || []) {
+        if (!blocked[k].has(id)) blocked[k].set(id, []);
+        blocked[k].get(id).push(Number(s.issue));
+      }
+    }
   }
 
   const kinds = ['people', 'unions'];
@@ -54,11 +62,15 @@ export function planUndo({ git, rel, data, changelog, applied, number, actor = '
       const b = before[k][id];
       const a = after[k][id];
       if (same(a, b)) continue;
-      if (!same(cur[k][id], a) || blocked[k].has(id)) conflicts.push({ kind: k, id });
+      if (blocked[k].has(id)) conflicts.push({ kind: k, id, siblings: blocked[k].get(id) });
+      else if (!same(cur[k][id], a)) conflicts.push({ kind: k, id });
       else changes.push({ kind: k, id, value: b });
     }
   }
-  if (conflicts.length) return { ok: false, reason: 'changed', records: conflicts, entry };
+  if (conflicts.length) {
+    const sib = [...new Set(conflicts.flatMap((c) => c.siblings || []))].sort((x, y) => x - y);
+    return { ok: false, reason: 'changed', records: conflicts, siblings: sib, entry };
+  }
   const rootChanged = after.meta.rootPersonId !== before.meta.rootPersonId && cur.meta.rootPersonId === after.meta.rootPersonId;
   if (!changes.length && !rootChanged) return { ok: false, reason: 'nothing' };
 

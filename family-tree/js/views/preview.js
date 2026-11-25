@@ -8,7 +8,7 @@ import { t, register, lang } from '../i18n.js';
 import { store } from '../store.js';
 import { personChip, ownerName, spinner } from '../ui.js';
 import { decodeProposal, extractProposal, findCodes } from '../core/codec.js';
-import { applyProposal, proposalHash } from '../core/ops.js';
+import { applyProposal, proposalHash, fingerprintOf } from '../core/ops.js';
 import { describeProposal, refNames } from '../core/describe.js';
 import { formatIssue } from '../core/messages.js';
 import { formatDate } from '../core/dates.js';
@@ -151,7 +151,7 @@ function dryRun(proposal) {
  */
 export async function analyzeProposal(proposal, { code = null, issue = null } = {}) {
   const hash = await proposalHash(proposal).catch(() => '');
-  const a = { proposal, code, hash, fp: hash.slice(0, 6), issue, result: dryRun(proposal), dataRef: store.data, subs: {} };
+  const a = { proposal, code, hash, fp: fingerprintOf(hash), issue, result: dryRun(proposal), dataRef: store.data, subs: {} };
   await ensureSubmission(a);
   if (!a.code) a.code = a.subs[lang()]?.code || null;
   return a;

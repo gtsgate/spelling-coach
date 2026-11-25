@@ -36,14 +36,15 @@ env:
 
 jobs:
   apply:
-    # Only approvals, slash commands on issues (not pull requests), the schedule and manual runs start the job.
+    # Only approvals, comments on issues (not pull requests) that contain a "/" anywhere (a quote-reply puts "> …"
+    # before the command; the script reads the first non-quoted line and decides), the schedule and manual runs.
     if: >-
       (github.event_name == 'issues' && github.event.action == 'labeled' &&
         (github.event.label.name == 'approve' || github.event.label.name == 'approve-deletion')) ||
       (github.event_name == 'issues' && github.event.action == 'opened' &&
         (contains(github.event.issue.labels.*.name, 'approve') || contains(github.event.issue.labels.*.name, 'approve-deletion'))) ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request == null &&
-        startsWith(github.event.comment.body, '/')) ||
+        contains(github.event.comment.body, '/')) ||
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch'
     # One data writer at a time; queued runs wait instead of being cancelled (nothing is lost).
@@ -53,11 +54,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      # The default branch (an empty ref means the event's own ref, which is the default branch for these events).
+      # The branch is always named explicitly, so the checkout is its CURRENT tip: with an empty ref, scheduled and
+      # manual runs would check out github.sha — the commit when the run was queued, possibly behind data pushed by
+      # the run it waited for — or, for a manual run, whatever branch it was started on. Schedule payloads carry no
+      # repository, so the default branch is then asked from the REST API.
+      - name: Find the default branch
+        id: branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FROM_EVENT: ${{ github.event.repository.default_branch }}
+        run: |
+          branch="$FROM_EVENT"
+          if [ -z "$branch" ]; then branch="$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)"; fi
+          if [ -z "$branch" ]; then echo "::error::could not determine the default branch"; exit 1; fi
+          echo "name=$branch" >> "$GITHUB_OUTPUT"
+
       - name: Check out the default branch (full history, for /undo)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          ref: ${{ steps.branch.outputs.name }}
           fetch-depth: 0
 
       - name: Set up Node.js
@@ -69,6 +84,5 @@ jobs:
         working-directory: ${{ env.PORTAL_DIR }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Empty for events without a repository payload: the script then asks the REST API.
-          GFT_BRANCH: ${{ github.event.repository.default_branch }}
+          GFT_BRANCH: ${{ steps.branch.outputs.name }}
         run: node scripts/apply-proposal.mjs

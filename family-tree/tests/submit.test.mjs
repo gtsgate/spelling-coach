@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   buildSubmission, issueUrl, messageText, issueTitle, waUrl, approvalComment, CODE_LABEL, GITHUB_URL_MAX, WHATSAPP_MAX,
 } from '../js/submit.js';
-import { newProposal, proposalHash } from '../js/core/ops.js';
+import { newProposal, proposalHash, fingerprintOf, FP_LENGTH } from '../js/core/ops.js';
 import { decodeProposal } from '../js/core/codec.js';
 import { normalizeData } from '../js/core/schema.js';
 import { buildGraph } from '../js/core/graph.js';
@@ -89,7 +89,8 @@ describe('submit: GitHub issue form', () => {
     assert.ok(u.searchParams.get('title').startsWith('🌳 '));
     assert.equal(s.github.fits, true);
     assert.equal(s.hash, await proposalHash(p));
-    assert.equal(s.fp, s.hash.slice(0, 6));
+    assert.equal(s.fp, fingerprintOf(s.hash));
+    assert.equal(s.fp.length, FP_LENGTH);
   });
 
   test('drops note, then submitter, then shortens the title, then gives up', () => {

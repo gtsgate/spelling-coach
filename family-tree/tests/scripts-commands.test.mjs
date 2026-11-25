@@ -3,7 +3,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseCommand, isApprover, commandText, firstLine, labelForCommand } from '../scripts/lib/commands.mjs';
-import { fpMatches, fpOf, hashProposal } from '../scripts/lib/hash.mjs';
+import { fpMatches, fpOf, fpTooShort, hashProposal, FP_LENGTH } from '../scripts/lib/hash.mjs';
 import { esc, escLine, marker, parseMarker, capBody, fitLines, link, WJ, MAX_COMMENT } from '../scripts/lib/render.mjs';
 import { proposal, P } from './scripts-kit.mjs';
 
@@ -77,16 +77,20 @@ describe('commands: parseCommand', () => {
 });
 
 describe('hash: fingerprints', () => {
-  test('fp is the first 6 hex chars; matching is case-insensitive and prefix-based (≥ 6)', async () => {
+  test('fp is the first 16 hex chars (64 bits); matching is case-insensitive and prefix-based (≥ 16)', async () => {
     const p = proposal([P.addChild('pahmed01')]);
     const { hash, fp } = await hashProposal(p);
     assert.match(hash, /^[0-9a-f]{64}$/);
-    assert.equal(fp, hash.slice(0, 6));
+    assert.equal(FP_LENGTH, 16);
+    assert.equal(fp, hash.slice(0, 16));
     assert.equal(fpOf(hash), fp);
     assert.ok(fpMatches(fp.toUpperCase(), hash));
-    assert.ok(fpMatches(hash.slice(0, 10), hash));
-    assert.ok(!fpMatches(hash.slice(0, 5), hash));
-    assert.ok(!fpMatches('zzzzzz', hash));
+    assert.ok(fpMatches(hash.slice(0, 20), hash));
+    assert.ok(fpMatches(hash, hash));
+    assert.ok(!fpMatches(hash.slice(0, 15), hash));
+    assert.ok(!fpMatches(hash.slice(0, 6), hash), 'a 24-bit prefix can be ground in seconds: never accepted');
+    assert.ok(fpTooShort(hash.slice(0, 6)) && !fpTooShort(fp) && !fpTooShort('please'));
+    assert.ok(!fpMatches('z'.repeat(16), hash));
     assert.ok(!fpMatches(null, hash));
     // createdAt does not change the hash; the content does
     assert.equal((await hashProposal({ ...p, createdAt: '2030-01-01T00:00:00Z' })).hash, hash);

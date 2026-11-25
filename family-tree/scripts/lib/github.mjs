@@ -89,8 +89,9 @@ export function createGitHub({
     request,
     async getRepo() { return (await request('GET', base)).data; },
     async getIssue(n) { return (await request('GET', `${base}/issues/${n}`)).data; },
-    async listIssues({ state = 'open', labels, max = 300 } = {}) {
-      const list = await paginate(`${base}/issues`, { state, labels, sort: 'created', direction: 'asc' }, max);
+    /** Issues (not PRs), oldest first. `since` (ISO time): only issues updated at or after it. */
+    async listIssues({ state = 'open', labels, since, max = 300 } = {}) {
+      const list = await paginate(`${base}/issues`, { state, labels, since, sort: 'created', direction: 'asc' }, max);
       return list.filter((i) => !i.pull_request);
     },
     async listComments(n) { return paginate(`${base}/issues/${n}/comments`, {}, 3000); },

@@ -144,7 +144,9 @@ describe('workflows and issue form', { skip: !ghDir && 'no .github folder found'
     assert.match(t, /workflow_dispatch:/);
     assert.match(t, /\n {4}if: >-/);
     assert.match(t, /github\.event\.issue\.pull_request == null/);
-    assert.match(t, /startsWith\(github\.event\.comment\.body, '\/'\)/);
+    // quote-replies ("> …\n/approve") must reach the script, which reads the first non-quoted line itself
+    assert.match(t, /contains\(github\.event\.comment\.body, '\/'\)/);
+    assert.ok(!/startsWith\(github\.event\.comment\.body/.test(t));
     assert.match(t, /\n {4}concurrency:\n {6}group: family-tree-data\n {6}cancel-in-progress: false/);
     assert.ok(!/^concurrency:/m.test(t), 'concurrency is on the job, not the workflow');
     assert.match(read('workflows/family-tree-backup.yml'), /cron: "41 2 \* \* 5"/);

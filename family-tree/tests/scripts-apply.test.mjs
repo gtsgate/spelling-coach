@@ -52,9 +52,10 @@ describe('apply: approvals', () => {
 
     const log = portal.originLog();
     assert.equal(log.length, 2);
-    assert.match(log[0], new RegExp(`family-tree: apply #${n} - Add “Yousef” as son of`));
+    assert.match(log[0], new RegExp(`family-tree: apply #${n}$`));
     const msg = sh(portal.work, 'log', '-1', '--format=%B');
     const { hash } = await hashProposal(p);
+    assert.match(msg, new RegExp(`^#${n} \\(rev 6\\): proposal ${p.id}, 1 change$`, 'm'));
     assert.match(msg, new RegExp(`^Gft-Apply: #${n} ${hash} rev 6$`, 'm'));
     assert.ok(msg.split('\n')[0].length <= 72);
 
@@ -137,9 +138,13 @@ describe('apply: approvals', () => {
     assert.ok(lastBot(gh, n).includes(`/approve ${fp}`));
     assert.ok(!gh.labelsOf(n).includes('approve'));
 
-    s = await keeperSays(gh, ctx, n, '/approve 000000');
+    s = await keeperSays(gh, ctx, n, '/approve 0000000000000000');
     assert.deepEqual(s.queue.applied, []);
     assert.match(lastBot(gh, n), /doesn’t match the current version/);
+    // an old-style 6-character fingerprint (even the right one) is refused as too short
+    s = await keeperSays(gh, ctx, n, `/approve ${fp.slice(0, 6)}`);
+    assert.deepEqual(s.queue.applied, []);
+    assert.match(lastBot(gh, n), /is too short/);
 
     s = await keeperSays(gh, ctx, n, `/approve ${fp}`);
     assert.deepEqual(s.queue.applied, [n]);
@@ -417,12 +422,14 @@ describe('apply: pushing', () => {
     assert.deepEqual(await waitForPages({ gh: none, sleep: async () => {} }, 'x'), { status: 'no-pages' });
   });
 
-  test('commit message: English title ≤ 72 chars, trailers per issue', () => {
-    const o = (n) => ({ item: { number: n, hash: 'f'.repeat(64) }, rev: n, titleEn: 'Add “A” '.repeat(30), linesEn: ['line'] });
+  test('commit message: title ≤ 72 chars (issue numbers only), one line per issue, trailers per issue', () => {
+    const o = (n) => ({ item: { number: n, hash: 'f'.repeat(64), proposal: { id: 'abcd1234', ops: [{}, {}] }, skipShown: [] }, rev: n, titleEn: 'Add “A” '.repeat(30), linesEn: ['line'] });
     const msg = commitMessage([o(1)]);
     assert.ok(msg.split('\n')[0].length <= 72);
+    assert.match(msg, /^family-tree: apply #1\n\n#1 \(rev 1\): proposal abcd1234, 2 changes\n/);
     assert.match(msg, /^Gft-Apply: #1 f{64} rev 1$/m);
     assert.match(commitMessage([o(1), o(2)]), /^family-tree: apply #1, #2\n/);
+    assert.ok(commitMessage(Array.from({ length: 40 }, (_, i) => o(i + 100))).split('\n')[0].length <= 72);
   });
 
   test('offline CLI dry run on the bundled fixture: applies in memory, writes nothing', async () => {

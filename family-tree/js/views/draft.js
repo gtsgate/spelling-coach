@@ -14,6 +14,7 @@ import { formatIssue } from '../core/messages.js';
 import { refNames, opCategory } from '../core/describe.js';
 import { buildGraph } from '../core/graph.js';
 import { LIMITS } from '../core/schema.js';
+import { fingerprintOf } from '../core/ops.js';
 import { formatDate } from '../core/dates.js';
 
 register({
@@ -496,7 +497,7 @@ function correctionBanner() {
     h('div', { class: 'stack stack-sm' },
       h('h2', { id: 'draft-corr-title', class: 'draft-correction-title' }, issue ? t('draft.corrTitle', { n: issue }) : t('draft.corrTitleCode')),
       h('p', null, issue ? t('draft.corrText') : t('draft.corrTextCode')),
-      src.hash ? h('p', { class: 'small muted' }, t('draft.fp'), ': ', h('code', { dir: 'ltr' }, String(src.hash).slice(0, 6))) : null,
+      src.hash ? h('p', { class: 'small muted' }, t('draft.fp'), ': ', h('code', { dir: 'ltr' }, fingerprintOf(src.hash))) : null,
       h('div', { class: 'row' },
         issue ? corrCopy : corrCreate,
         issue ? h('a', { class: 'btn', href: store.repoUrl(`/issues/${issue}`), target: '_blank', rel: 'noopener' }, icon('github'), t('draft.corrOpen', { n: issue })) : null,

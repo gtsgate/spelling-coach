@@ -64,7 +64,9 @@ register({
     'dlg.anotherMother': 'Another mother (not listed)',
     'dlg.anotherFather': 'Another father (not listed)',
     'dlg.anotherParent': 'Another parent (not listed)',
-    'dlg.anotherHint': 'Will be added as a spouse of {name} too.',
+    'dlg.anotherHint.f': 'She will also be added as the wife of {name}.',
+    'dlg.anotherHint.m': 'He will also be added as the husband of {name}.',
+    'dlg.anotherHint.u': 'Will also be added as the spouse of {name}.',
     'dlg.parentUnknown': 'Not known',
     'dlg.parentUnknownHint': 'It can be added later.',
     'dlg.otherName': 'Her or his first name',
@@ -88,6 +90,9 @@ register({
     'dlg.parentsFull': 'Both parents of {name} are already in the tree. To replace one of them, use “Change parents”.',
     'dlg.changeParents': 'Change parents',
     'dlg.scope': 'Is this also the {role} of {siblings}?',
+    'dlg.pron.m': 'he',
+    'dlg.pron.f': 'she',
+    'dlg.pron.u': 'this person',
     'dlg.scope.union': 'Yes, of all of them',
     'dlg.scope.only': 'No, only of {name}',
     'dlg.role.m': 'father',
@@ -293,7 +298,9 @@ register({
     'dlg.anotherMother': 'أمّ أخرى (غير موجودة في القائمة)',
     'dlg.anotherFather': 'أب آخر (غير موجود في القائمة)',
     'dlg.anotherParent': 'والد آخر (غير موجود في القائمة)',
-    'dlg.anotherHint': 'ستُضاف أيضاً زوجاً أو زوجةً لـ{name}.',
+    'dlg.anotherHint.f': 'ستُضاف أيضاً زوجةً لـ{name}.',
+    'dlg.anotherHint.m': 'سيُضاف أيضاً زوجاً لـ{name}.',
+    'dlg.anotherHint.u': 'يُضاف هذا الوالد أيضاً بوصفه زوجاً أو زوجةً لـ{name}.',
     'dlg.parentUnknown': 'غير معروف',
     'dlg.parentUnknownHint': 'يمكن إضافته لاحقاً.',
     'dlg.otherName': 'الاسم الأول',
@@ -316,7 +323,10 @@ register({
     'dlg.change': 'تغيير',
     'dlg.parentsFull': 'والدا {name} مسجّلان في الشجرة. لاستبدال أحدهما يمكن استخدام «تغيير الوالدين».',
     'dlg.changeParents': 'تغيير الوالدين',
-    'dlg.scope': 'هل هو كذلك {role} {siblings}؟',
+    'dlg.scope': 'هل {pron} كذلك {role} {siblings}؟',
+    'dlg.pron.m': 'هو',
+    'dlg.pron.f': 'هي',
+    'dlg.pron.u': 'هذا الشخص',
     'dlg.scope.union': 'نعم، لهم جميعاً',
     'dlg.scope.only': 'لا، لـ{name} فقط',
     'dlg.role.m': 'والد',
@@ -886,7 +896,7 @@ export function openAddRelative(personId, as = 'child') {
       lead: avatar(s.person, { size: 'sm' }),
       hint: lineageOf(s.person) !== nameOf(s.person) ? lineageOf(s.person) : '',
     }));
-    options.push({ value: 'new', label: t(opk === 'f' ? 'dlg.anotherMother' : opk === 'm' ? 'dlg.anotherFather' : 'dlg.anotherParent'), hint: t('dlg.anotherHint', { name: nameOf(P) }) });
+    options.push({ value: 'new', label: t(opk === 'f' ? 'dlg.anotherMother' : opk === 'm' ? 'dlg.anotherFather' : 'dlg.anotherParent'), hint: t(`dlg.anotherHint.${opk}`, { name: nameOf(P) }) });
     options.push({ value: 'unknown', label: t('dlg.parentUnknown'), hint: t('dlg.parentUnknownHint') });
     const initial = spouses.length === 1 ? `s:${spouses[0].person.id}` : spouses.length ? '' : 'unknown';
     const newName = bilingualInputs({ id: `dlg-other-${++dlgSeq}`, kind: 'given', placeholderAr: opk === 'm' ? 'محمد' : 'فاطمة', placeholderEn: opk === 'm' ? 'Muhammad' : 'Fatimah' });
@@ -931,7 +941,7 @@ export function openAddRelative(personId, as = 'child') {
       if (sibs.length) {
         const role = formCtx.gender ? formCtx.gender : 'u';
         q.scope = radioCards({
-          legend: t('dlg.scope', { role: t(`dlg.role.${role}`), siblings: listNames(sibs) }),
+          legend: t('dlg.scope', { role: t(`dlg.role.${role}`), pron: t(`dlg.pron.${role}`), siblings: listNames(sibs) }),
           value: 'union',
           options: [
             { value: 'union', label: t('dlg.scope.union') },
@@ -1759,7 +1769,7 @@ export function openLinkExisting(personId) {
       const sibs = B ? graph.childrenOfUnion(B.id).filter((c) => c.id !== personId) : [];
       if (sibs.length) {
         extra.scope = radioCards({
-          legend: t('dlg.scope', { role: t(`dlg.role.${genderKey(chosen)}`), siblings: listNames(sibs) }), value: 'union',
+          legend: t('dlg.scope', { role: t(`dlg.role.${genderKey(chosen)}`), pron: t(`dlg.pron.${genderKey(chosen)}`), siblings: listNames(sibs) }), value: 'union',
           options: [{ value: 'union', label: t('dlg.scope.union') }, { value: 'only', label: t('dlg.scope.only', { name: nameOf(P) }) }],
         });
         extraHost.append(extra.scope.el);

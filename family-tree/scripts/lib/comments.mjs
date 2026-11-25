@@ -5,6 +5,7 @@
 import { esc, escLine, marker, fitLines, capBody, link, rtl, codeBlock, MAX_COMMENT } from './render.mjs';
 import { commandText } from './commands.mjs';
 import { MARKERS } from './labels.mjs';
+import { FP_LENGTH } from './hash.mjs';
 
 /** Short bilingual strings: [ar, en]. Functions take a params object. */
 export const TEXTS = {
@@ -70,6 +71,18 @@ export const TEXTS = {
     `البصمة المكتوبة (${p.given}) لا تطابق النسخة الحالية للمقترح (${p.fp}) — ربما عُدّل بعد المراجعة. للموافقة على النسخة الحالية:`,
     `The fingerprint given (${p.given}) doesn’t match the current version (${p.fp}) — it may have been edited after review. To approve the current version:`,
   ],
+  needFpShort: (p) => [
+    `البصمة المكتوبة (${p.given}) أقصر من اللازم: البصمة ${FP_LENGTH} حرفاً كما تظهر في تعليق المراجعة. للموافقة على النسخة الحالية:`,
+    `The fingerprint given (${p.given}) is too short: the fingerprint is the ${FP_LENGTH} characters shown in the check comment. To approve the current version:`,
+  ],
+  approvalChanged: [
+    'تغيّر المقترح بعد تسجيل الموافقة عليه، فلم يُطبَّق. للموافقة على النسخة الحالية كما تظهر في تعليق المراجعة أعلاه، يكفي تعليق بهذا النص:',
+    'The proposal changed after the approval was recorded, so it was not applied. To approve the current version, as shown in the check comment above, comment:',
+  ],
+  idReused: (p) => [
+    `رقم هذا المقترح (${p.id}) استُخدم من قبل لمقترح مختلف طُبّق في ${p.ref}، ولا يُقبل مقترحان مختلفان بالرقم نفسه. يُرجى إرسال التعديلات من الموقع من جديد.`,
+    `This proposal’s id (${p.id}) was already used by a different proposal, applied in ${p.ref}; two different proposals can’t share an id. Please send the changes again from the site.`,
+  ],
   alreadyApplied: (p) => [`ℹ️ سبق تطبيق هذه التعديلات نفسها في ${p.ref}، فلا حاجة إلى تطبيقها مرة أخرى.`, `ℹ️ These exact changes were already applied in ${p.ref}, so there is nothing more to do.`],
   approvalReceived: ['وصلت الموافقة، وجارٍ التطبيق…', 'Approval received — applying now…'],
   correctionReceived: ['وصل المقترح المصحّح، وحُدّثت المراجعة أعلاه.', 'Corrected proposal received — the check above is updated.'],
@@ -103,6 +116,10 @@ export const TEXTS = {
     '❌ Can’t undo: these records changed after it was applied (undoing would erase later changes):',
   ],
   undoInvalid: ['❌ تعذّر التراجع، لأن النتيجة لن تكون سليمة:', '❌ Can’t undo: the result would not be valid:'],
+  undoBatch: (p) => [
+    `طُبّق هذا المقترح في التحديث نفسه مع ${p.ref}، وقد عُدّلت فيه السجلات المذكورة أيضاً، لذا لا يمكن التراجع عنه وحده.`,
+    `This proposal was saved in the same update as ${p.ref}, which also changed the records listed, so it can’t be undone on its own.`,
+  ],
   undoCleanup: [
     'يمكن تصحيح هذه السجلات يدوياً بمقترح جديد من الموقع.',
     'These records can be corrected with a new proposal from the site instead.',
@@ -110,6 +127,17 @@ export const TEXTS = {
 };
 
 const tx = (key, p) => (typeof TEXTS[key] === 'function' ? TEXTS[key](p || {}) : TEXTS[key]);
+
+/** Texts of the issue codes the scripts add themselves (core codes go through messages.formatIssue). */
+const SCRIPT_ISSUES = {
+  PROPOSAL_ID_REUSED: (params) => tx('idReused', { id: params?.proposalId || '', ref: `#${Number(params?.issue) || '?'}` }),
+};
+
+/** Text of a script-level issue in a language, or null when the code is not one of them. */
+export function scriptIssueText(issue, lang) {
+  const f = SCRIPT_ISSUES[issue?.code];
+  return f ? f(issue.params)[lang === 'en' ? 1 : 0] : null;
+}
 /** "عربي · English" on one line. */
 export const bi = (key, p) => { const [ar, en] = tx(key, p); return `${ar} · ${en}`; };
 /** Arabic paragraph (RTL) followed by the English one. */
@@ -264,8 +292,14 @@ export function needDeletionComment({ fp }) {
     biPara('needDeletionText'), codeBlock(commandText('approve-deletion', fp))].join('\n\n');
 }
 
-export function needFpComment({ fp, cmd = 'approve', given = null }) {
-  const body = given ? biPara('needFpMismatch', { given: esc(given), fp }) : biPara('needFpEdited');
+/**
+ * "Please confirm the fingerprint". why: "edited" (bare approval of an edited proposal), "mismatch" (fp of another
+ * version), "short" (fewer than FP_LENGTH characters), "changed" (the proposal changed after the approval was recorded).
+ */
+export function needFpComment({ fp, cmd = 'approve', given = null, why = given ? 'mismatch' : 'edited' }) {
+  const body = why === 'short' ? biPara('needFpShort', { given: esc(given) })
+    : why === 'mismatch' ? biPara('needFpMismatch', { given: esc(given), fp })
+      : why === 'changed' ? biPara('approvalChanged') : biPara('needFpEdited');
   return [marker(MARKERS.RESULT, { status: 'needs-fingerprint', fp }), `### 🔒 ${bi('needFp')}`, body,
     codeBlock(commandText(cmd, fp))].join('\n\n');
 }
@@ -274,9 +308,12 @@ export function simpleComment(key, params, status = key) {
   return [marker(MARKERS.RESULT, { status }), biPara(key, params)].join('\n\n');
 }
 
-/** Hidden record of an approval command (the queue re-reads fp/skip/force from the approver's own comment). */
-export function approvalNote({ cmd, commentId, by, fp = null, skip = [], force = false, correction = false }) {
-  return [marker(MARKERS.APPROVAL, { cmd, comment: commentId, by, fp, skip: skip.join(','), force: force ? 1 : 0 }),
+/**
+ * Hidden record of an approval command (the queue re-reads fp/skip/force from the approver's own comment). `hash` is
+ * the FULL hash of the proposal when the command was handled: the queue applies the approval only to that exact version.
+ */
+export function approvalNote({ cmd, commentId, by, fp = null, skip = [], force = false, correction = false, hash = '' }) {
+  return [marker(MARKERS.APPROVAL, { cmd, comment: commentId, by, fp, skip: skip.join(','), force: force ? 1 : 0, hash, for: commentId }),
     correction ? `✏️ ${bi('correctionReceived')}\n\n👍 ${bi('approvalReceived')}` : `👍 ${bi('approvalReceived')}`].join('\n\n');
 }
 
@@ -293,11 +330,12 @@ export function undoneComment({ issue, commitUrl, commitShort, rev, people = [] 
   return capBody(parts.join('\n\n'));
 }
 
-export function undoRefusedComment({ reason, records = [], errors = { ar: [], en: [] } }) {
+export function undoRefusedComment({ reason, records = [], errors = { ar: [], en: [] }, siblings = [] }) {
   const parts = [marker(MARKERS.RESULT, { status: `undo-${reason}` })];
   if (reason === 'changed') {
     const [a, e] = tx('undoChanged');
     parts.push(bilingualList(a, e, records.map((r) => r.ar), records.map((r) => r.en), { budget: 8000, number: false }));
+    if (siblings.length) parts.push(`ℹ️ ${bi('undoBatch', { ref: siblings.map(issueRef).join(', ') })}`);
     parts.push(biPara('undoCleanup'));
   } else if (reason === 'invalid') {
     const [a, e] = tx('undoInvalid');
