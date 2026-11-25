@@ -44,7 +44,7 @@
   overflow-wrap: anywhere;
 }
 :root[lang="ar"] .person-name { line-height: 1.45; }
-.person-name-other { margin: 0; font-size: 1.05rem; color: var(--ink-2); font-family: var(--font-ui); }
+.person-name-other { align-self: flex-start; margin: 0; font-size: 1.05rem; color: var(--ink-2); font-family: var(--font-ui); }
 .person-name-other:lang(ar) { font-family: "Noto Naskh Arabic", var(--font-ui); }
 .person-lineage { margin: 0; font-family: var(--font-names); font-size: 1.08rem; color: var(--ink); opacity: .85; overflow-wrap: anywhere; }
 .person-nick { margin: 0; color: var(--ink-2); font-size: .98rem; }
@@ -133,6 +133,7 @@
 @media (max-width: 420px) {
   .person-hero-top { flex-direction: column; align-items: center; text-align: center; gap: var(--s3); }
   .person-hero-id { align-items: center; }
+  .person-name-other { align-self: center; }
   .person-badges { justify-content: center; }
   .person-relation { align-self: center; justify-content: center; }
   .person-auto { justify-content: center; text-align: center; }
