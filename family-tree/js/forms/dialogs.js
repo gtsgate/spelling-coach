@@ -501,6 +501,10 @@ function openShell({ title, size = 'md', className = '', backdropClose = false }
     resolveFn(value);
   }
   dlg.addEventListener('cancel', (e) => { e.preventDefault(); close(false); });
+  // Navigating away (browser Back, a link) closes the dialog.
+  const onHash = () => close(false);
+  window.addEventListener('hashchange', onHash);
+  promise.then(() => window.removeEventListener('hashchange', onHash));
   dlg.addEventListener('click', (e) => { if (backdropClose && e.target === dlg) close(false); });
   document.body.appendChild(dlg);
   document.body.classList.add('modal-open');
@@ -607,7 +611,8 @@ function commit(shell, issues, ops, { skipDuplicateIds = [] } = {}) {
     return false;
   }
   const warns = tr.warnings.filter((w) => !SILENT.has(w.code) && !(w.code === 'POSSIBLE_DUPLICATE' && skipDuplicateIds.includes(w.params?.id)));
-  const key = JSON.stringify(warns.map(issueKey));
+  // Keyed by the visible text: fresh temp refs on every click must not ask again for the same warnings.
+  const key = fmt(warns).join('\n');
   if (warns.length && shell.confirmedKey !== key) {
     shell.confirmedKey = key;
     issues.show('warning', t('dlg.confirmWarnings'), fmt(warns));

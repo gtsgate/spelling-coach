@@ -23,7 +23,7 @@ export async function runBackup({ gh, files, date, keep = 12, target, log = () =
   if (!existing) {
     const people = Object.keys(data?.people || {}).length;
     const body = [
-      `نسخة احتياطية لبيانات شجرة العائلة بتاريخ ${date} — ${people} فرداً، مراجعة البيانات ${data?.meta?.revision ?? 0}.`,
+      `نسخة احتياطية لبيانات شجرة العائلة بتاريخ ${date} — عدد الأفراد: ${people}، مراجعة البيانات: ${data?.meta?.revision ?? 0}.`,
       '',
       `Family tree data backup of ${date} — ${people} people, data revision ${data?.meta?.revision ?? 0}, ${changelog.entries.length} changelog entries.`,
       '',

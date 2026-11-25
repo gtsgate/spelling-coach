@@ -35,7 +35,7 @@ export async function runCli(main) {
     const code = await main();
     process.exitCode = code || 0;
   } catch (e) {
-    console.error(e?.stack || String(e));
+    console.error(process.env.GFT_DEBUG || !(e instanceof Error) || e.name !== 'Error' ? e?.stack || String(e) : `error: ${e.message}`);
     process.exitCode = 1;
   }
 }
