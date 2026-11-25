@@ -1,0 +1,19 @@
+{
+  "repo": { "owner": "gtsgate", "name": "spelling-coach", "branch": "main" },
+  "portalPath": "family-tree",
+  "siteUrl": "https://gtsgate.github.io/spelling-coach/family-tree/",
+  "approvers": ["gtsgate"],
+  "labels": {
+    "proposal": "family-tree",
+    "approve": "approve",
+    "approveDeletion": "approve-deletion",
+    "needsChanges": "needs-changes",
+    "applied": "applied",
+    "deletion": "deletion-request"
+  },
+  "contact": { "whatsapp": "", "email": "" },
+  "relayUrl": "",
+  "defaultLanguage": "ar",
+  "arabicDigits": false,
+  "treeDefaultDepth": 3
+}
