@@ -699,7 +699,7 @@ body.has-draft-bar { --draftbar-h: 66px; }
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     white-space: normal;
-    font-size: .92rem;
+    font-size: min(.92rem, 15.5px); /* does not grow with A+/A++: the header must still fit at 360px */
     line-height: 1.15;
   }
   :root[lang="ar"] .brand-title { line-height: 1.35; }

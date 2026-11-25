@@ -40,13 +40,13 @@ describe('describeOp: add-person links with gender agreement', () => {
     const ctx = ctxFor(ops);
     assert.deepEqual(both(ops[0], ctx), [
       'إضافة «أحمد» ابناً لـ محمد أحمد عالم وزكية إسماعيل قربان',
-      'Add “Ahmed” as son of Muhammad Ahmed Alem and Zakiya Ismail Qurban',
+      'Add “Ahmed” as son of Muhammad Ahmed Alam and Zakiya Ismail Qurban',
     ]);
     assert.deepEqual(both(ops[1], ctx), [
       'إضافة «سارة» ابنةً لـ محمد أحمد عالم وزكية إسماعيل قربان',
-      'Add “Sara” as daughter of Muhammad Ahmed Alem and Zakiya Ismail Qurban',
+      'Add “Sara” as daughter of Muhammad Ahmed Alam and Zakiya Ismail Qurban',
     ]);
-    assert.deepEqual(both(ops[2], ctx), ['إضافة «رامي» إلى أبناء محمد أحمد عالم', 'Add “Rami” as child of Muhammad Ahmed Alem']);
+    assert.deepEqual(both(ops[2], ctx), ['إضافة «رامي» إلى أبناء محمد أحمد عالم', 'Add “Rami” as child of Muhammad Ahmed Alam']);
   });
 
   test('child of a union (existing or created earlier in the proposal via unionRef)', () => {
@@ -60,7 +60,7 @@ describe('describeOp: add-person links with gender agreement', () => {
     assert.deepEqual(both(ops[2], ctx), ['إضافة «ليلى» ابنةً لـ «أحمد» و«سارة»', 'Add “Laila” as daughter of “Ahmed” and “Sara”']);
     assert.deepEqual(both(ops[3], ctx), [
       'إضافة «هشام» ابناً لـ محمد أحمد عالم وزكية إسماعيل قربان',
-      'Add “Hisham” as son of Muhammad Ahmed Alem and Zakiya Ismail Qurban',
+      'Add “Hisham” as son of Muhammad Ahmed Alam and Zakiya Ismail Qurban',
     ]);
   });
 
@@ -72,9 +72,9 @@ describe('describeOp: add-person links with gender agreement', () => {
     const ctx = ctxFor(ops);
     assert.deepEqual(both(ops[0], ctx), [
       'إضافة «منى» زوجةً لـ سامي محمد عالم (تاريخ الزواج: 1995)',
-      'Add “Mona” as wife of Sami Muhammad Alem (married 1995)',
+      'Add “Mona” as wife of Sami Muhammad Alam (married 1995)',
     ]);
-    assert.deepEqual(both(ops[1], ctx), ['إضافة «كمال» زوجاً سابقاً لـ هدى محمد عالم', 'Add “Kamal” as former husband of Huda Muhammad Alem']);
+    assert.deepEqual(both(ops[1], ctx), ['إضافة «كمال» زوجاً سابقاً لـ هدى محمد عالم', 'Add “Kamal” as former husband of Huda Muhammad Alam']);
   });
 
   test('parent: والداً / والدةً; scope union lists the siblings who gain the parent; scope only', () => {
@@ -87,8 +87,8 @@ describe('describeOp: add-person links with gender agreement', () => {
     assert.deepEqual(both(ops[0], ctx), ['إضافة «إسماعيل» والداً لـ زكية إسماعيل قربان', 'Add “Ismail” as father of Zakiya Ismail Qurban']);
     const [ar, en] = both(ops[1], ctx);
     assert.match(ar, /^إضافة «نوال» والدةً لـ هدى محمد عالم \(وكذلك سامي، أحمد، هيفاء، سلوى وهيام\)$/);
-    assert.match(en, /^Add “Nawal” as mother of Huda Muhammad Alem \(and also of Sami, Ahmed, Haifa, Salwa and Hiyam\)$/);
-    assert.deepEqual(both(ops[2], ctx), ['إضافة «فهد» والداً لـ هدى محمد عالم فقط', 'Add “Fahad” as father of Huda Muhammad Alem only']);
+    assert.match(en, /^Add “Nawal” as mother of Huda Muhammad Alam \(and also of Sami, Ahmed, Haifa, Salwa and Hiyam\)$/);
+    assert.deepEqual(both(ops[2], ctx), ['إضافة «فهد» والداً لـ هدى محمد عالم فقط', 'Add “Fahad” as father of Huda Muhammad Alam only']);
   });
 
   test('sibling: شقيقاً / شقيقةً (same parents), أخاً / أختاً من الأب / من الأم, other parent', () => {
@@ -99,15 +99,15 @@ describe('describeOp: add-person links with gender agreement', () => {
       add('new4', { name: { ar: 'نادر' } }, { as: 'sibling', of: HUDA, share: 'father', otherParent: KHADIJA }),
     ];
     const ctx = ctxFor(ops);
-    assert.deepEqual(both(ops[0], ctx), ['إضافة «منى» شقيقةً لـ هدى محمد عالم', 'Add “Mona” as sister of Huda Muhammad Alem (same father and mother)']);
-    assert.deepEqual(both(ops[1], ctx), ['إضافة «كريم» أخاً لـ هدى محمد عالم من الأب', 'Add “Karim” as brother of Huda Muhammad Alem (same father)']);
+    assert.deepEqual(both(ops[0], ctx), ['إضافة «منى» شقيقةً لـ هدى محمد عالم', 'Add “Mona” as sister of Huda Muhammad Alam (same father and mother)']);
+    assert.deepEqual(both(ops[1], ctx), ['إضافة «كريم» أخاً لـ هدى محمد عالم من الأب', 'Add “Karim” as brother of Huda Muhammad Alam (same father)']);
     assert.deepEqual(both(ops[2], ctx), [
       'إضافة «ريم» أختاً لـ هدى محمد عالم من الأم (والدها محمد علي محمود)',
-      'Add “Reem” as sister of Huda Muhammad Alem (same mother; father: Muhammad Ali Mahmoud)',
+      'Add “Reem” as sister of Huda Muhammad Alam (same mother; father: Muhammad Ali Mahmoud)',
     ]);
     assert.deepEqual(both(ops[3], ctx), [
       'إضافة «نادر» إلى إخوة هدى محمد عالم من الأب (والدته خديجة فتة)',
-      'Add “Nader” as sibling of Huda Muhammad Alem (same father; mother: Khadija Fatta)',
+      'Add “Nader” as sibling of Huda Muhammad Alam (same father; mother: Khadija Fatta)',
     ]);
   });
 
@@ -121,8 +121,8 @@ describe('describeOp: add-person links with gender agreement', () => {
     ];
     const ctx = ctxFor(ops);
     assert.deepEqual(both(ops[0], ctx), ['إضافة «سالم» (1950–2010)', 'Add “Salem” (1950–2010)']);
-    assert.deepEqual(both(ops[1], ctx), ['إضافة زوجة لـ سامي محمد عالم (الاسم محجوب)', 'Add a wife of Sami Muhammad Alem (name withheld)']);
-    assert.deepEqual(both(ops[2], ctx), ['إضافة ابن لـ محمد أحمد عالم (الاسم غير معروف)', 'Add a son of Muhammad Ahmed Alem (name not known)']);
+    assert.deepEqual(both(ops[1], ctx), ['إضافة زوجة لـ سامي محمد عالم (الاسم محجوب)', 'Add a wife of Sami Muhammad Alam (name withheld)']);
+    assert.deepEqual(both(ops[2], ctx), ['إضافة ابن لـ محمد أحمد عالم (الاسم غير معروف)', 'Add a son of Muhammad Ahmed Alam (name not known)']);
     assert.equal(describeOp(ops[3], ctx, 'ar'), 'إضافة «أم خالد» زوجةً لـ سامي محمد عالم');
     assert.deepEqual(both(ops[4], ctx), ['إضافة «جود» (متوفاة)', 'Add “Jood” (deceased)']);
   });
@@ -155,7 +155,7 @@ describe('describeOp: every other operation', () => {
   const ctx = ctxFor(ops);
   const expected = [
     ['تعديل بيانات محمد أحمد عالم: تاريخ الميلاد: 12 مارس 1950؛ المهنة بالعربية: «معلم»',
-      'Edit Muhammad Ahmed Alem: date of birth: 12 Mar 1950; occupation (Arabic): “معلم”'],
+      'Edit Muhammad Ahmed Alam: date of birth: 12 Mar 1950; occupation (Arabic): “معلم”'],
     null, // checked separately
     ['تسجيل وفاة خديجة فتة (تاريخ الوفاة: 2001)', 'Mark Khadija Fatta as deceased (died 2001)'],
     ['تسجيل أن خديجة فتة على قيد الحياة', 'Mark Khadija Fatta as living'],
@@ -163,24 +163,24 @@ describe('describeOp: every other operation', () => {
     ['إلغاء تأكيد بيانات خديجة فتة', 'Remove the verified mark from Khadija Fatta'],
     ['طلب معلومات ناقصة عن خديجة فتة: «سنة الميلاد»', 'Ask for missing information about Khadija Fatta: “سنة الميلاد”'],
     ['تسجيل اكتمال معلومات خديجة فتة', 'Mark the information about Khadija Fatta as complete'],
-    ['تعليم محمد أحمد عالم كتكرار محتمل لـ ابراهيم أحمد عالم', 'Mark Muhammad Ahmed Alem as a possible duplicate of Ibrahim Ahmed Alem'],
-    ['إلغاء علامة التكرار عن محمد أحمد عالم', 'Mark Muhammad Ahmed Alem as not a duplicate'],
+    ['تعليم محمد أحمد عالم كتكرار محتمل لـ ابراهيم أحمد عالم', 'Mark Muhammad Ahmed Alam as a possible duplicate of Ibrahim Ahmed Alam'],
+    ['إلغاء علامة التكرار عن محمد أحمد عالم', 'Mark Muhammad Ahmed Alam as not a duplicate'],
     ['إخفاء اسم خديجة فتة وتفاصيلها الشخصية', 'Make Khadija Fatta private (name and personal details hidden)'],
     ['تسجيل زواج ابراهيم أحمد عالم وإحسان قنديل (زواج سابق؛ تاريخ الزواج: 1975)',
-      'Link Ibrahim Ahmed Alem and Ihsan Qandil as spouses (former marriage; married 1975)'],
+      'Link Ibrahim Ahmed Alam and Ihsan Qandil as spouses (former marriage; married 1975)'],
     ['تغيير والدَي ابراهيم أحمد عالم إلى محمد علي محمود وإحسان قنديل (حالياً: أحمد محمد عالم وخديجة فتة)',
-      'Change the parents of Ibrahim Ahmed Alem to Muhammad Ali Mahmoud and Ihsan Qandil (now: Ahmed Muhammad Alem and Khadija Fatta)'],
+      'Change the parents of Ibrahim Ahmed Alam to Muhammad Ali Mahmoud and Ihsan Qandil (now: Ahmed Muhammad Alam and Khadija Fatta)'],
     ['تغيير والدَي ابراهيم أحمد عالم إلى محمد أحمد عالم وزكية إسماعيل قربان (حالياً: أحمد محمد عالم وخديجة فتة)',
-      'Change the parents of Ibrahim Ahmed Alem to Muhammad Ahmed Alem and Zakiya Ismail Qurban (now: Ahmed Muhammad Alem and Khadija Fatta)'],
+      'Change the parents of Ibrahim Ahmed Alam to Muhammad Ahmed Alam and Zakiya Ismail Qurban (now: Ahmed Muhammad Alam and Khadija Fatta)'],
     ['تعديل بيانات زواج محمد أحمد عالم وزكية إسماعيل قربان: حالة الزواج: طلاق؛ تاريخ الزواج: 1970',
-      'Edit the marriage of Muhammad Ahmed Alem and Zakiya Ismail Qurban: marriage status: divorced; date of marriage: 1970'],
+      'Edit the marriage of Muhammad Ahmed Alam and Zakiya Ismail Qurban: marriage status: divorced; date of marriage: 1970'],
     ['إعادة ترتيب أبناء محمد أحمد عالم وزكية إسماعيل قربان: سلوى، هدى، سامي، أحمد، هيفاء، هيام',
-      'Reorder the children of Muhammad Ahmed Alem and Zakiya Ismail Qurban: Salwa, Huda, Sami, Ahmed, Haifa, Hiyam'],
+      'Reorder the children of Muhammad Ahmed Alam and Zakiya Ismail Qurban: Salwa, Huda, Sami, Ahmed, Haifa, Hiyam'],
     ['إعادة ترتيب زوجات محمد علي محمود: عائشة، إحسان قنديل', 'Reorder the spouses of Muhammad Ali Mahmoud: Aisha, Ihsan Qandil'],
-    ['تسجيل هدى محمد عالم ابنةً لـ خديجة فتة من الرضاعة', 'Record Huda Muhammad Alem as milk daughter of Khadija Fatta'],
-    ['تسجيل سامي محمد عالم في كفالة خديجة فتة', 'Record Sami Muhammad Alem as foster son of Khadija Fatta (kafala)'],
-    ['استعادة سامي محمد عالم', 'Restore Sami Muhammad Alem'],
-    ['استعادة زواج محمد أحمد عالم وزكية إسماعيل قربان', 'Restore the marriage of Muhammad Ahmed Alem and Zakiya Ismail Qurban'],
+    ['تسجيل هدى محمد عالم ابنةً لـ خديجة فتة من الرضاعة', 'Record Huda Muhammad Alam as milk daughter of Khadija Fatta'],
+    ['تسجيل سامي محمد عالم في كفالة خديجة فتة', 'Record Sami Muhammad Alam as foster son of Khadija Fatta (kafala)'],
+    ['استعادة سامي محمد عالم', 'Restore Sami Muhammad Alam'],
+    ['استعادة زواج محمد أحمد عالم وزكية إسماعيل قربان', 'Restore the marriage of Muhammad Ahmed Alam and Zakiya Ismail Qurban'],
   ];
   ops.forEach((op, i) => {
     if (!expected[i]) return;
@@ -190,7 +190,7 @@ describe('describeOp: every other operation', () => {
   test('edit values are labelled (enumerations, booleans, Hijri dates) and agree with gender', () => {
     const [ar, en] = both(ops[1], ctx);
     assert.equal(ar, 'تعديل بيانات هدى محمد عالم: الحياة أو الوفاة: متوفاة؛ خصوصية تاريخ الميلاد: السنة فقط؛ الجنس: أنثى؛ تقريب تاريخ الميلاد: تقريبي؛ وتعديل آخر');
-    assert.equal(en, 'Edit Huda Muhammad Alem: living or deceased: deceased; birth-date privacy: year only; gender: female; approximate date of birth: approximate; and 1 more change');
+    assert.equal(en, 'Edit Huda Muhammad Alam: living or deceased: deceased; birth-date privacy: year only; gender: female; approximate date of birth: approximate; and 1 more change');
     const hijri = describeOp({ op: 'edit-person', id: HUDA, set: { 'death.hijri': '1440-09-01', 'bio.ar': '' } }, ctx, 'ar');
     assert.equal(hijri, 'تعديل بيانات هدى محمد عالم: تاريخ الوفاة الهجري: 1 رمضان 1440 هـ (6 مايو 2019)؛ النبذة بالعربية: (تُمسح القيمة)');
   });
@@ -216,19 +216,19 @@ describe('describeOp: removals show only the reason-code label', () => {
 
   test('every removal op in both languages', () => {
     assert.deepEqual(ops.map((op) => both(op, ctx)), [
-      ['حذف سامي محمد عالم (السبب: إدخال عن طريق الخطأ)', 'Remove Sami Muhammad Alem (reason: entered by mistake)'],
+      ['حذف سامي محمد عالم (السبب: إدخال عن طريق الخطأ)', 'Remove Sami Muhammad Alam (reason: entered by mistake)'],
       ['حذف هدى محمد عالم مع مسح بياناتها الشخصية (السبب: بطلب من صاحب الشأن)',
-        'Remove Huda Muhammad Alem and erase their personal details (reason: at the person’s own request)'],
+        'Remove Huda Muhammad Alam and erase their personal details (reason: at the person’s own request)'],
       ['فك ارتباط الزواج بين مريم محمد عالم وعبدالملك زيني (السبب: سبب آخر)',
-        'Unlink the marriage of Maryam Muhammad Alem and Abdulmalik Zaini (reason: other reason)'],
+        'Unlink the marriage of Maryam Muhammad Alam and Abdulmalik Zaini (reason: other reason)'],
       ['فصل ابراهيم أحمد عالم عن أسرة أحمد محمد عالم وخديجة فتة (السبب: ربط بوالدين غير صحيحين)',
-        'Detach Ibrahim Ahmed Alem from the family of Ahmed Muhammad Alem and Khadija Fatta (reason: linked to the wrong parents)'],
+        'Detach Ibrahim Ahmed Alam from the family of Ahmed Muhammad Alam and Khadija Fatta (reason: linked to the wrong parents)'],
       ['إزالة رابطة الرضاعة بين هدى محمد عالم وخديجة فتة (السبب: إدخال مكرر)',
-        'Remove the milk (nursing) tie between Huda Muhammad Alem and Khadija Fatta (reason: duplicate entry)'],
+        'Remove the milk (nursing) tie between Huda Muhammad Alam and Khadija Fatta (reason: duplicate entry)'],
       ['إزالة رابطة الكفالة بين سامي محمد عالم وخديجة فتة (السبب: سبب آخر)',
-        'Remove the foster (kafala) tie between Sami Muhammad Alem and Khadija Fatta (reason: other reason)'],
+        'Remove the foster (kafala) tie between Sami Muhammad Alam and Khadija Fatta (reason: other reason)'],
       ['دمج محمد صالح أبوغلية في محمد أحمد عالم (الشخص نفسه؛ السبب: إدخال مكرر؛ مع اعتماد والدَي محمد صالح أبوغلية)',
-        'Merge Muhammad Saleh Abu Ghulia into Muhammad Ahmed Alem (the same person; reason: duplicate entry; keeping the parents of Muhammad Saleh Abu Ghulia)'],
+        'Merge Muhammad Saleh Abu Ghulia into Muhammad Ahmed Alam (the same person; reason: duplicate entry; keeping the parents of Muhammad Saleh Abu Ghulia)'],
     ]);
   });
 
@@ -236,7 +236,7 @@ describe('describeOp: removals show only the reason-code label', () => {
     const secret = 'سبب عائلي خاص جداً';
     const op = { op: 'remove-person', id: SAMI, reasonCode: secret, reason: secret, note: secret };
     for (const lang of ['ar', 'en']) assert.ok(!describeOp(op, ctx, lang).includes(secret));
-    assert.equal(describeOp(op, ctx, 'en'), 'Remove Sami Muhammad Alem (reason: other reason)');
+    assert.equal(describeOp(op, ctx, 'en'), 'Remove Sami Muhammad Alam (reason: other reason)');
     for (const code of REASON_CODES) {
       const text = describeOp({ op: 'unlink-spouse', union: U_MZ, reasonCode: code }, ctx, 'ar');
       assert.ok(!text.includes(code), text);
@@ -245,7 +245,7 @@ describe('describeOp: removals show only the reason-code label', () => {
 
   test('merging two people with the same display name tells them apart by id', () => {
     const text = describeOp({ op: 'merge-person', keep: HUDA, remove: HUDA, reasonCode: 'duplicate' }, ctx, 'en');
-    assert.match(text, /^Merge Huda Muhammad Alem \(pfrgn8rv\) into Huda Muhammad Alem \(pfrgn8rv\)/);
+    assert.match(text, /^Merge Huda Muhammad Alam \(pfrgn8rv\) into Huda Muhammad Alam \(pfrgn8rv\)/);
   });
 });
 
@@ -302,7 +302,7 @@ describe('describeOp: coverage, robustness, plain text', () => {
     assert.equal(describeOp({ op: 'bogus' }, {}, 'ar'), 'تعديل غير معروف (bogus)');
     assert.equal(describeOp(null, {}, 'en'), 'Unknown change (?)');
     assert.equal(describeOp({ op: 'add-person', link: 'nope' }, {}, 'en'), 'Add a person (name not known)');
-    assert.equal(describeOp({ op: 'mark', id: MUHAMMAD, mark: 'shiny' }, { graph: g }, 'en'), 'Mark Muhammad Ahmed Alem (shiny)');
+    assert.equal(describeOp({ op: 'mark', id: MUHAMMAD, mark: 'shiny' }, { graph: g }, 'en'), 'Mark Muhammad Ahmed Alam (shiny)');
   });
 
   test('temp refs without refNames still read as new people', () => {
@@ -356,10 +356,10 @@ describe('describeProposal', () => {
     const ar = describeProposal(p, g, 'ar');
     const en = describeProposal(p, g, 'en');
     assert.equal(ar.title, 'إضافة «أحمد» و«سارة» إلى عائلة محمد أحمد عالم');
-    assert.equal(en.title, 'Add “Ahmed” and “Sara” to the family of Muhammad Ahmed Alem');
+    assert.equal(en.title, 'Add “Ahmed” and “Sara” to the family of Muhammad Ahmed Alam');
     assert.deepEqual(en.lines, [
-      'Add “Ahmed” as son of Muhammad Ahmed Alem and Zakiya Ismail Qurban',
-      'Add “Sara” as daughter of Muhammad Ahmed Alem and Zakiya Ismail Qurban',
+      'Add “Ahmed” as son of Muhammad Ahmed Alam and Zakiya Ismail Qurban',
+      'Add “Sara” as daughter of Muhammad Ahmed Alam and Zakiya Ismail Qurban',
     ]);
     assert.deepEqual(en.counts, { add: 2, edit: 0, mark: 0, arrange: 0, remove: 0 });
     assert.equal(en.destructive, false);
@@ -376,21 +376,21 @@ describe('describeProposal', () => {
     assert.equal(r.title, 'تصحيح واحد، تحديثا حالة، عملية حذف واحدة — عائلة هدى محمد عالم');
     assert.equal(r.destructive, true);
     assert.deepEqual(r.counts, { add: 0, edit: 1, mark: 2, arrange: 0, remove: 1 });
-    assert.equal(describeProposal({ ops: base }, g, 'en').title, '1 correction, 2 status updates, 1 removal — family of Huda Muhammad Alem');
+    assert.equal(describeProposal({ ops: base }, g, 'en').title, '1 correction, 2 status updates, 1 removal — family of Huda Muhammad Alam');
 
     const many = [];
     for (let i = 1; i <= 12; i++) many.push(add(`new${i}`, { name: { ar: `ابن${i}` }, gender: 'm' }, { as: 'child', of: MUHAMMAD }));
     many.push({ op: 'edit-person', id: HUDA, set: { 'birth.date': '1980' } }, { op: 'edit-person', id: SAMI, set: { 'birth.date': '1981' } },
       { op: 'edit-person', id: MUHAMMAD, set: { 'birth.date': '1950' } });
     assert.equal(describeProposal({ ops: many }, g, 'ar').title, '12 فرداً جديداً، 3 تصحيحات — عائلة محمد أحمد عالم');
-    assert.equal(describeProposal({ ops: many }, g, 'en').title, '12 new people, 3 corrections — family of Muhammad Ahmed Alem');
+    assert.equal(describeProposal({ ops: many }, g, 'en').title, '12 new people, 3 corrections — family of Muhammad Ahmed Alam');
     assert.equal(describeProposal({ ops: many.slice(0, 5).concat(many.slice(12, 14)) }, g, 'ar').title,
       '5 أفراد جدد، تصحيحان — عائلة محمد أحمد عالم');
   });
 
   test('a single op uses its line as the title; empty proposals; titles are capped', () => {
     const one = describeProposal({ ops: [{ op: 'mark', id: HUDA, mark: 'verified' }] }, g, 'en');
-    assert.equal(one.title, 'Mark the details of Huda Muhammad Alem as verified');
+    assert.equal(one.title, 'Mark the details of Huda Muhammad Alam as verified');
     assert.equal(describeProposal({ ops: [] }, g, 'ar').title, 'مقترح فارغ');
     assert.equal(describeProposal(null, g, 'en').title, 'Empty proposal');
     const long = { ops: [{ op: 'edit-person', id: HUDA, set: { 'bio.ar': 'نص طويل '.repeat(30), 'occupation.ar': 'م'.repeat(80) } }] };

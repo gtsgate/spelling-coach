@@ -191,13 +191,13 @@ test('emptyPerson / normalizePerson: full shape in spec key order', () => {
 
 test('normalizePerson never mutates input and tolerates garbage', () => {
   const input = deepFreeze({
-    id: ' pabc1 ', name: 'أحمد', surname: 'Alem', gender: 'M', tags: ['verified', 'verified', 5, ''], ties: { x: 1 },
+    id: ' pabc1 ', name: 'أحمد', surname: 'Alam', gender: 'M', tags: ['verified', 'verified', 5, ''], ties: { x: 1 },
     history: 'nope', spouseOrder: ['u1', 'u1'], birth: 1950, removed: false, unknownKey: 1,
   });
   const p = normalizePerson(input);
   assert.equal(p.id, 'pabc1');
   assert.deepEqual(p.name, { ar: 'أحمد', en: '' }, 'bare Arabic string → ar');
-  assert.deepEqual(p.surname, { ar: '', en: 'Alem' }, 'bare Latin string → en');
+  assert.deepEqual(p.surname, { ar: '', en: 'Alam' }, 'bare Latin string → en');
   assert.equal(p.gender, 'm');
   assert.deepEqual(p.tags, ['verified']);
   assert.deepEqual(p.ties, []);

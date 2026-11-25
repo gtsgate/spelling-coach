@@ -145,7 +145,7 @@ describe('messages: params rendered with names', () => {
   test('person ids become lineage names with a graph, ids without', () => {
     const issue = { code: 'IS_ROOT', params: { id: 'pg8caja6' } };
     assert.equal(formatIssue(issue, 'ar', { graph: real }), 'سالم عالم هو الشخص الذي تبدأ منه الشجرة، ولا يمكن حذفه.');
-    assert.equal(formatIssue(issue, 'en', { graph: real }), 'Salem Alem is the person the tree starts from and cannot be removed.');
+    assert.equal(formatIssue(issue, 'en', { graph: real }), 'Salem Alam is the person the tree starts from and cannot be removed.');
     assert.equal(formatIssue(issue, 'en'), 'pg8caja6 is the person the tree starts from and cannot be removed.');
   });
 
@@ -155,15 +155,15 @@ describe('messages: params rendered with names', () => {
     const she = formatIssue({ code: 'HAS_CHILDREN', params: { id: 'pr09lmw1', children: ['p7cfv90d'] } }, 'ar', { graph: real });
     assert.equal(she, 'لا يمكن حذف خديجة فتة لوجود أبناء لها في الشجرة (محمد أحمد عالم).');
     const union = formatIssue({ code: 'HAS_CHILDREN', params: { union: 'ux7te3mf', children: ['pfrgn8rv'] } }, 'en', { graph: real });
-    assert.equal(union, 'This marriage cannot be removed while it has children in the tree (Huda Muhammad Alem).');
+    assert.equal(union, 'This marriage cannot be removed while it has children in the tree (Huda Muhammad Alam).');
   });
 
   test('marriages are named by their partners', () => {
     const t = formatIssue({ code: 'WIDOWED_BUT_LIVING', params: { union: 'ux7te3mf' } }, 'ar', { graph: real });
     assert.equal(t, 'زواج محمد أحمد عالم وزكية إسماعيل قربان مسجّل كترمّل، لكن الزوجين كليهما مسجّلان على قيد الحياة.');
     assert.equal(formatIssue({ code: 'DUPLICATE_UNION', params: { union: 'uxx', partners: ['p7cfv90d', 'pciev8ne'] } }, 'en', { graph: real }),
-      'Muhammad Ahmed Alem and Zakiya Ismail Qurban are already linked as spouses.');
-    assert.equal(unionLabel('ux7te3mf', 'en', { graph: real }), 'Muhammad Ahmed Alem and Zakiya Ismail Qurban');
+      'Muhammad Ahmed Alam and Zakiya Ismail Qurban are already linked as spouses.');
+    assert.equal(unionLabel('ux7te3mf', 'en', { graph: real }), 'Muhammad Ahmed Alam and Zakiya Ismail Qurban');
   });
 
   test('temp refs are named from refNames (quoted); unknown temp refs read as new people', () => {
@@ -178,14 +178,14 @@ describe('messages: params rendered with names', () => {
 
   test('merged records: a person or a marriage', () => {
     assert.equal(formatIssue({ code: 'MERGED_REDIRECT', params: { field: 'id', from: 'p9w7ue6t', to: 'p7cfv90d' } }, 'en', { graph: real }),
-      'Muhammad Saleh Abu Ghulia was merged into Muhammad Ahmed Alem, so the change applies to Muhammad Ahmed Alem.');
+      'Muhammad Saleh Abu Ghulia was merged into Muhammad Ahmed Alam, so the change applies to Muhammad Ahmed Alam.');
     assert.equal(formatIssue({ code: 'MERGED_USE_UNDO', params: { union: 'ux7te3mf', mergedInto: 'u8leuyay' } }, 'en', { graph: real }),
-      'The marriage of Muhammad Ahmed Alem and Zakiya Ismail Qurban was merged into the marriage of Ibrahim Ahmed Alem and Ilham Hassan Kabli; a merge is reversed by the owner with /undo on the original proposal.');
+      'The marriage of Muhammad Ahmed Alam and Zakiya Ismail Qurban was merged into the marriage of Ibrahim Ahmed Alam and Ilham Hassan Kabli; a merge is reversed by the owner with /undo on the original proposal.');
   });
 
   test('RESTORE_CONFLICT explains the reason; DESTRUCTIVE_NOT_ALLOWED distinguishes a change of parents', () => {
     assert.equal(formatIssue({ code: 'RESTORE_CONFLICT', params: { reason: 'duplicate-union', id: 'p7cfv90d' } }, 'en', { graph: real }),
-      'Muhammad Ahmed Alem cannot be restored: the same couple is already linked again.');
+      'Muhammad Ahmed Alam cannot be restored: the same couple is already linked again.');
     assert.equal(formatIssue({ code: 'RESTORE_CONFLICT', params: { reason: 'partner-removed', union: 'ux7te3mf', id: 'p7cfv90d' } }, 'ar', { graph: real }),
       'لا يمكن استعادة زواج محمد أحمد عالم وزكية إسماعيل قربان: أحد الزوجين في هذا الزواج محذوف.');
     assert.match(formatIssue({ code: 'DESTRUCTIVE_NOT_ALLOWED', params: { type: 'move-person', reason: 'reparent' } }, 'en'), /change of parents/);

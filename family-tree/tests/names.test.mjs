@@ -116,7 +116,7 @@ describe('personName', () => {
 
 describe('displayName', () => {
   const b = builder();
-  b.P('psalem', 'حسن', 'Hassan', 'm', { surname: { ar: 'عالم', en: 'Alem' } });
+  b.P('psalem', 'حسن', 'Hassan', 'm', { surname: { ar: 'عالم', en: 'Alam' } });
   b.P('pmoh', 'محمد', 'Mohammed', 'm');
   b.U('ubirth', ['psalem'], ['pmoh']);
   b.P('pwife', '', '', 'f', { nameStatus: 'unknown', surname: { ar: 'داغستاني', en: 'Daghestani' } });
@@ -151,18 +151,18 @@ describe('displayName', () => {
   });
   test('unknown / withheld wife: زوجة / حرم + surname', () => {
     assert.equal(displayName(g.person('pwife'), 'ar', g), 'زوجة محمد حسن عالم (داغستاني)');
-    assert.equal(displayName(g.person('pwife'), 'en', g), 'Wife of Mohammed Hassan Alem (Daghestani)');
+    assert.equal(displayName(g.person('pwife'), 'en', g), 'Wife of Mohammed Hassan Alam (Daghestani)');
     assert.equal(displayName(g.person('pwife2'), 'ar', g), 'حرم محمد حسن عالم');
-    assert.equal(displayName(g.person('pwife2'), 'en', g), 'Wife of Mohammed Hassan Alem');
+    assert.equal(displayName(g.person('pwife2'), 'en', g), 'Wife of Mohammed Hassan Alam');
   });
   test('children: ابنة / كريمة / ابن / أحد أبناء', () => {
     assert.equal(displayName(g.person('pdw'), 'ar', g), 'كريمة محمد حسن عالم');
     assert.equal(displayName(g.person('pdu'), 'ar', g), 'ابنة محمد حسن عالم');
     assert.equal(displayName(g.person('psu'), 'ar', g), 'ابن محمد حسن عالم');
     assert.equal(displayName(g.person('pxu'), 'ar', g), 'أحد أبناء محمد حسن عالم');
-    assert.equal(displayName(g.person('pdu'), 'en', g), 'Daughter of Mohammed Hassan Alem');
-    assert.equal(displayName(g.person('psu'), 'en', g), 'Son of Mohammed Hassan Alem');
-    assert.equal(displayName(g.person('pxu'), 'en', g), 'Child of Mohammed Hassan Alem');
+    assert.equal(displayName(g.person('pdu'), 'en', g), 'Daughter of Mohammed Hassan Alam');
+    assert.equal(displayName(g.person('psu'), 'en', g), 'Son of Mohammed Hassan Alam');
+    assert.equal(displayName(g.person('pxu'), 'en', g), 'Child of Mohammed Hassan Alam');
   });
   test('husband and parent labels, kunya in the genitive', () => {
     assert.equal(displayName(g.person('phus'), 'ar', g), 'زوج نورة (الحربي)');
@@ -203,7 +203,7 @@ describe('fullName', () => {
 
 describe('lineageName', () => {
   const b = builder();
-  b.P('pg4', 'عالم', 'Alem', 'm', { surname: { ar: 'العالم', en: 'Al-Alem' } });
+  b.P('pg4', 'عالم', 'Alam', 'm', { surname: { ar: 'العالم', en: 'Al-Alam' } });
   b.P('pg3', 'سالم', 'Salem', 'm');
   b.P('pg2', 'حسن', 'Hassan', 'm');
   b.P('pg1', 'محمد', 'Mohammed', 'm');
@@ -218,7 +218,7 @@ describe('lineageName', () => {
   b.P('pali', 'علي', 'Ali', 'm');
   b.U('uabu', ['pabu'], ['pali']);
   // unknown father with a surname: names stop, surname continues
-  b.P('punk', '', '', 'm', { nameStatus: 'unknown', surname: { ar: 'عالم', en: 'Alem' } });
+  b.P('punk', '', '', 'm', { nameStatus: 'unknown', surname: { ar: 'عالم', en: 'Alam' } });
   b.P('pghazi', 'غازي', 'Ghazi', 'm');
   b.U('uunk', ['punk'], ['pghazi']);
   // mother only: never followed
@@ -233,16 +233,16 @@ describe('lineageName', () => {
 
   test('plain style (default) with the first surname along the whole paternal chain', () => {
     assert.equal(lineageName(g, 'pg1', 'ar'), 'محمد حسن سالم العالم');
-    assert.equal(lineageName(g, 'pg1', 'en'), 'Mohammed Hassan Salem Al-Alem');
+    assert.equal(lineageName(g, 'pg1', 'en'), 'Mohammed Hassan Salem Al-Alam');
     assert.equal(lineageName(g, 'pg0', 'ar', { depth: 2 }), 'فاطمة محمد العالم');
     assert.equal(lineageName(g, 'pg0', 'ar', { depth: 5 }), 'فاطمة محمد حسن سالم عالم العالم');
     assert.equal(lineageName(g, 'pg0', 'ar', { depth: 1 }), 'فاطمة العالم');
   });
   test('bin style: بن / بنت, bin / bint', () => {
     assert.equal(lineageName(g, 'pg1', 'ar', { style: 'bin' }), 'محمد بن حسن بن سالم العالم');
-    assert.equal(lineageName(g, 'pg1', 'en', { style: 'bin' }), 'Mohammed bin Hassan bin Salem Al-Alem');
+    assert.equal(lineageName(g, 'pg1', 'en', { style: 'bin' }), 'Mohammed bin Hassan bin Salem Al-Alam');
     assert.equal(lineageName(g, 'pg0', 'ar', { style: 'bin' }), 'فاطمة بنت محمد بن حسن العالم');
-    assert.equal(lineageName(g, 'pg0', 'en', { style: 'bin' }), 'Fatima bint Mohammed bin Hassan Al-Alem');
+    assert.equal(lineageName(g, 'pg0', 'en', { style: 'bin' }), 'Fatima bint Mohammed bin Hassan Al-Alam');
   });
   test('kunya-only ancestor: genitive after بن', () => {
     assert.equal(lineageName(g, 'pali', 'ar', { style: 'bin' }), 'علي بن أبي خالد الحربي');
@@ -251,7 +251,7 @@ describe('lineageName', () => {
   });
   test('stops at an unknown father but still finds the surname', () => {
     assert.equal(lineageName(g, 'pghazi', 'ar'), 'غازي عالم');
-    assert.equal(lineageName(g, 'pghazi', 'en', { style: 'bin' }), 'Ghazi Alem');
+    assert.equal(lineageName(g, 'pghazi', 'en', { style: 'bin' }), 'Ghazi Alam');
   });
   test('only a male father is followed', () => {
     assert.equal(lineageName(g, 'pnoor', 'ar'), 'نور');
@@ -259,7 +259,7 @@ describe('lineageName', () => {
   });
   test('unknown person → display label', () => {
     assert.equal(lineageName(g, 'punk', 'ar'), 'والد غازي عالم');
-    assert.equal(displayName(g.person('punk'), 'en', g), 'Father of Ghazi Alem');
+    assert.equal(displayName(g.person('punk'), 'en', g), 'Father of Ghazi Alam');
     assert.equal(lineageName(g, 'nobody', 'ar'), '');
   });
   test('setLineageStyle changes the default; invalid values are ignored', () => {
@@ -278,9 +278,9 @@ describe('lineageName', () => {
     assert.ok(moh);
     assert.equal(lineageName(rg, moh.id, 'ar'), 'محمد حسن سالم عالم');
     // English is the automatic spelling (the owner chose "Muhammad" for محمد)
-    assert.equal(lineageName(rg, moh.id, 'en'), 'Muhammad Hassan Salem Alem');
+    assert.equal(lineageName(rg, moh.id, 'en'), 'Muhammad Hassan Salem Alam');
     assert.equal(lineageName(rg, moh.id, 'ar', { style: 'bin' }), 'محمد بن حسن بن سالم عالم');
-    assert.equal(lineageName(rg, moh.id, 'en', { style: 'bin' }), 'Muhammad bin Hassan bin Salem Alem');
+    assert.equal(lineageName(rg, moh.id, 'en', { style: 'bin' }), 'Muhammad bin Hassan bin Salem Alam');
   });
   test('cycle-safe on bad data', () => {
     const c = builder();

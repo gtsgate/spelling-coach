@@ -34,7 +34,7 @@ register({
     'draft.aboutYou': 'About you',
     'draft.aboutYouHint': 'So {owner} knows who sent the changes.',
     'draft.name': 'Your name',
-    'draft.namePh': 'e.g. Ahmed Muhammad Alem',
+    'draft.namePh': 'e.g. Ahmed Muhammad Alam',
     'draft.relation': 'Your relation to the family',
     'draft.relationPh': 'e.g. grandson of Hassan',
     'draft.me': 'You in the tree',

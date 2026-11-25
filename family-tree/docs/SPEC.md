@@ -276,8 +276,8 @@ back to the English text) · `displayName(p, lang, graph?)`: known → name (+ "
 unknown/withheld → nickname, else a polite relational label using graph: wife "زوجة X"/"Wife of X" (withheld wife: "حرم X"), daughter
 "ابنة X" (withheld: "كريمة X"), son "ابن X", unknown gender "أحد أبناء X"/"Child of X", else "غير معروف"/"Unknown"; plus surname
 when present · `fullName(p, lang, graph?)` (displayName + surname verbatim, never adds آل/Al-) · `lineageName(graph, id, lang,
-{depth:3, style})`: style `"plain"` (default from `config.lineageStyle`) → "محمد حسن سالم عالم" / "Mohammed Hassan Salem Alem";
-`"bin"` → "محمد بن حسن بن سالم عالم" / "Mohammed bin Hassan bin Salem Alem" (بنت/bint for women; kunya-only ancestor in genitive
+{depth:3, style})`: style `"plain"` (default from `config.lineageStyle`) → "محمد حسن سالم عالم" / "Mohammed Hassan Salem Alam";
+`"bin"` → "محمد بن حسن بن سالم عالم" / "Mohammed bin Hassan bin Salem Alam" (بنت/bint for women; kunya-only ancestor in genitive
 after بن: أبو→أبي). Follows ONLY a male father (gender m); stops at unknown/withheld/absent father; surname = the first non-empty
 surname along the whole paternal chain (unbounded) · `initials` · `normalizeArabic` (strip tashkeel/tatweel; أإآٱ→ا; ة→ه; ى→ي; ؤ→و;
 ئ→ي; "عبد ال"≡"عبدال"; "ابو "≡"ابو") · `searchKey(s)` · `skeletonKey(s)`: shared consonant skeleton for Arabic, Latin and Arabizi

@@ -98,7 +98,7 @@ const GIVEN = {
 
 // Family / tribe names and other surname tokens.
 const SURNAME = {
-  'عالم': 'Alem', 'محمود': 'Mahmoud', 'فتة': 'Fatta', 'قربان': 'Qurban', 'كابلي': 'Kabli', 'بليلة': 'Balila', 'أبوغلية': 'Abu Ghulia',
+  'عالم': 'Alam', 'محمود': 'Mahmoud', 'فتة': 'Fatta', 'قربان': 'Qurban', 'كابلي': 'Kabli', 'بليلة': 'Balila', 'أبوغلية': 'Abu Ghulia',
   'حبيب': 'Habib', 'عاشور': 'Ashour', 'أصغر': 'Asghar', 'الحوتي': 'Al-Hawati', 'زيني': 'Zaini', 'عزت': 'Ezzat', 'عيد': 'Eid',
   'الريس': 'Al-Rayyis', 'متولي': 'Metwally', 'المرزوقي': 'Al-Marzouqi', 'مرزوقي': 'Marzouqi', 'أبو النجا': 'Abu Al-Naja',
   'أبوالنجا': 'Abu Al-Naja', 'دهلوي': 'Dahlawi', 'حافظ': 'Hafez', 'آل غالب': 'Al Ghalib', 'جودت': 'Jawdat', 'زقزوق': 'Zaqzouq',

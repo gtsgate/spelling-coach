@@ -60,7 +60,7 @@ register({
     'pf.g.self.m': 'Male', 'pf.g.self.f': 'Female',
     'pf.genderRequired': 'Please choose one.',
     'pf.surname': 'Family name',
-    'pf.surnameHint': 'As the family writes it, e.g. Alem, Al-Harbi. For someone who married into the family: the rest of their full name.',
+    'pf.surnameHint': 'As the family writes it, e.g. Alam, Al-Harbi. For someone who married into the family: the rest of their full name.',
     'pf.nickname': 'Nickname or kunya',
     'pf.nicknamePh': 'Abu Khalid',
     'pf.nicknameHint': 'Optional — how the family knows them.',
@@ -538,7 +538,7 @@ export function personForm({ mode = 'add', person = null, context = {} } = {}) {
 
   // --- family name & nickname --------------------------------------------------------------------------
   const surId = uid('surname');
-  const surBi = bilingualInputs({ id: surId, value: p.surname, kind: 'surname', maxLength: LIMITS.surname, placeholderAr: 'عالم', placeholderEn: 'Alem' });
+  const surBi = bilingualInputs({ id: surId, value: p.surname, kind: 'surname', maxLength: LIMITS.surname, placeholderAr: 'عالم', placeholderEn: 'Alam' });
   const surField = field({ label: t('pf.surname'), control: surBi.el, id: surId, hint: t('pf.surnameHint') });
   const nickId = uid('nick');
   const nickBi = bilingualInputs({ id: nickId, value: p.nickname, kind: 'given', maxLength: LIMITS.nickname, placeholderAr: 'أبو خالد', placeholderEn: 'Abu Khalid' });

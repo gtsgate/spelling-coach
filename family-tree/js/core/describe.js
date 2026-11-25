@@ -4,7 +4,7 @@
 // Pure ES module — runs unchanged in modern browsers and Node ≥ 20 (no DOM, no fetch, no node: imports).
 // See docs/SPEC.md §3.3 / §3.4 (operations) and §4 (describe.js).
 //
-//   describeOp(op, ctx, lang)          ctx = {graph, refNames}; e.g. EN Add “Ahmed” as son of Muhammad Ahmed Alem
+//   describeOp(op, ctx, lang)          ctx = {graph, refNames}; e.g. EN Add “Ahmed” as son of Muhammad Ahmed Alam
 //                                                                    AR إضافة «أحمد» ابناً لـ محمد أحمد عالم
 //   refNames(proposalOrOps, graph?)    temp refs → what describe needs to name them ("new3" → its PersonInput,
 //                                      "newu4" → the partners of the union it binds)
@@ -635,7 +635,7 @@ function clip(s, max = TITLE_MAX) {
  * Summary of a proposal: {title, lines, destructive, counts:{add, edit, mark, arrange, remove}}.
  *   lines: describeOp of every op (same order as proposal.ops; numbering is up to the renderer)
  *   destructive: a destructive op is present (static check; a REPARENT is only known after applying)
- *   title: one line ≤ 100 chars, e.g. "Add “Ahmed” and “Sara” to the family of Muhammad Ahmed Alem",
+ *   title: one line ≤ 100 chars, e.g. "Add “Ahmed” and “Sara” to the family of Muhammad Ahmed Alam",
  *          "3 new people, 2 corrections — family of …" / "3 أفراد جدد، تصحيحان — عائلة …"
  */
 export function describeProposal(p, graph = null, lang = 'ar') {

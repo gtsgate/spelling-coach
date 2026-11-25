@@ -342,7 +342,7 @@ const DLG_PERSON = people.find((p) => p.gender === 'm' && p.id !== WIZ_FATHER &&
 if (!WIZ_FATHER || !DLG_PERSON) throw new Error('could not pick flow test people');
 
 const draftOps = (page) => page.evaluate(() => globalThis.__gft.draft.ops.map((o) => JSON.parse(JSON.stringify(o))));
-const modalOpen = (page) => page.waitForSelector('dialog.modal[open]', { timeout: 5000 });
+const modalOpen = async (page) => { await page.waitForSelector('dialog.modal[open]', { timeout: 5000 }); await page.waitForTimeout(250); }; // let the sheet animation finish
 const modalClosed = (page) => page.waitForFunction(() => !document.querySelector('dialog.modal[open]'), null, { timeout: 5000 });
 async function shot(page, name) {
   await page.screenshot({ path: path.join(SHOTS, `flow-${name}.png`), fullPage: false });

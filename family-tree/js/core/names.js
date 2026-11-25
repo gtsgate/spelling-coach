@@ -228,8 +228,8 @@ function inheritedSurname(graph, p, lang) {
 
 /**
  * Lineage name: given name + father + grandfather … (`depth` names in all) + family name.
- *   plain: "محمد حسن سالم عالم" / "Mohammed Hassan Salem Alem"
- *   bin:   "محمد بن حسن بن سالم عالم" / "Mohammed bin Hassan bin Salem Alem" (بنت/bint after a woman's name;
+ *   plain: "محمد حسن سالم عالم" / "Mohammed Hassan Salem Alam"
+ *   bin:   "محمد بن حسن بن سالم عالم" / "Mohammed bin Hassan bin Salem Alam" (بنت/bint after a woman's name;
  *          a kunya after بن is put in the genitive: "بن أبي خالد").
  * Follows ONLY a male father; stops at an unknown/withheld/absent father. The family name is the first
  * non-empty surname along the whole paternal chain (also past unnamed fathers).

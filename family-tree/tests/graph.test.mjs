@@ -426,7 +426,7 @@ describe('stats', () => {
 
 describe('search', () => {
   const b = builder();
-  b.P('psalem', 'سالم', 'Salem', 'm', { surname: { ar: 'عالم', en: 'Alem' } });
+  b.P('psalem', 'سالم', 'Salem', 'm', { surname: { ar: 'عالم', en: 'Alam' } });
   b.P('pahmed', 'أحمد', 'Ahmed', 'm');
   b.P('pmoh', 'محمد', 'Mohammed', 'm');
   b.P('pmoh2', 'محمد', 'Mohammed', 'm');
@@ -472,7 +472,7 @@ describe('search', () => {
     assert.deepEqual(top('عبد الرحمن الحربي'), ['pabd']);
   });
   test('lineage tokens: "محمد احمد" ≡ "محمد بن أحمد"', () => {
-    for (const q of ['محمد احمد', 'محمد أحمد', 'محمد بن أحمد', 'Mohammed Ahmed', 'Mohammed bin Ahmed', 'محمد سالم', 'محمد أحمد عالم', 'Mohamed Ahmed Salem Alem']) {
+    for (const q of ['محمد احمد', 'محمد أحمد', 'محمد بن أحمد', 'Mohammed Ahmed', 'Mohammed bin Ahmed', 'محمد سالم', 'محمد أحمد عالم', 'Mohamed Ahmed Salem Alam']) {
       assert.deepEqual(top(q), ['pmoh'], q);
     }
     assert.ok(g.search('محمد أحمد')[0].score > g.search('محمد سالم')[0].score, 'a skipped generation ranks lower');
@@ -587,7 +587,7 @@ describe('real data', () => {
     assert.equal(br.length, 2);
     assert.deepEqual(br.map((x) => x.person.id), [salem.id, head2.id]);
     for (const x of br) assert.equal(x.person.gender, 'm');
-    assert.deepEqual(br[0].label, { ar: 'سالم عالم', en: 'Salem Alem' });
+    assert.deepEqual(br[0].label, { ar: 'سالم عالم', en: 'Salem Alam' });
     assert.deepEqual(br[1].label, { ar: 'محمد علي محمود', en: 'Muhammad Ali Mahmoud' }); // automatic English
     assert.ok(br.every((x) => x.count > 40));
   });

@@ -50,7 +50,7 @@ test('stored English wins; auto only fills empty English', () => {
   assert.equal(englishOf({ ar: 'محمد' }), 'Muhammad');
   assert.equal(isAutoEnglish({ ar: 'محمد' }), true);
   assert.equal(isAutoEnglish({ ar: 'محمد', en: 'Mohamed' }), false);
-  assert.deepEqual(autoEnglish({ name: { ar: 'علي' }, surname: { ar: 'عالم' } }), { name: 'Ali', surname: 'Alem', nickname: '' });
+  assert.deepEqual(autoEnglish({ name: { ar: 'علي' }, surname: { ar: 'عالم' } }), { name: 'Ali', surname: 'Alam', nickname: '' });
 });
 
 test('every name in the real data gets a sensible English spelling', () => {

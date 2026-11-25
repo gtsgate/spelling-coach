@@ -85,14 +85,14 @@ const UNKNOWN_NAME = 'الاسم غير معروف — Name unknown';
 // Family 1 — أولاد محمد حسن سالم عالم
 // The head's full name «محمد حسن سالم عالم» = محمد بن حسن بن سالم، من عائلة عالم.
 const salem = P('سالم', 'Salem', 'm', {
-  surname: ['عالم', 'Alem'],
+  surname: ['عالم', 'Alam'],
   needsInfo: 'أُضيف من الاسم الكامل «محمد حسن سالم عالم» — يُرجى التأكيد وإضافة التفاصيل. Added from the full name; please confirm.',
 });
 const hassan0 = P('حسن', 'Hassan', 'm', {
   needsInfo: 'أُضيف من الاسم الكامل «محمد حسن سالم عالم» — يُرجى التأكيد وإضافة التفاصيل. Added from the full name; please confirm.',
 });
 U([salem], [hassan0]);
-const head1 = P('محمد', 'Muhammad', 'm', { surname: ['عالم', 'Alem'] });
+const head1 = P('محمد', 'Muhammad', 'm', { surname: ['عالم', 'Alam'] });
 U([hassan0], [head1]);
 
 // Children of محمد حسن سالم عالم (their mother is not named in the notes)
@@ -225,7 +225,7 @@ M(wIhsan, P('السعيد', 'Al-Saeed', 'm', { surname: ['الشربيني', 'Al
   P('سميرة', 'Samira', 'f'), P('السيد', 'Al-Sayed', 'm'), P('سلوى', 'Salwa', 'f'),
 ]);
 M(wAlawiya, P('؟', '?', 'm', {
-  surname: ['عالم', 'Alem'],
+  surname: ['عالم', 'Alam'],
   needsInfo: 'الاسم الأول غير معروف. First name unknown.',
 }), [
   P('غازي', 'Ghazi', 'm'), P('نزيهة', 'Naziha', 'f'), P('؟', '?', '', { needsInfo: UNKNOWN_NAME }),
