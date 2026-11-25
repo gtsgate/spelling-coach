@@ -24,6 +24,7 @@ import { applyProposal, newProposal, proposalHash } from '../../js/core/ops.js';
 import { normalizeData, serializeData, validateData } from '../../js/core/schema.js';
 import { buildGraph } from '../../js/core/graph.js';
 import { describeProposal } from '../../js/core/describe.js';
+import { lineageName } from '../../js/core/names.js';
 
 const require = createRequire(import.meta.url);
 let chromium;
@@ -325,8 +326,293 @@ async function i18nCheck(browser) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// 3. Flows (filled in below)
+// 3. Flows
 const FLOWS = [];
+const flow = (name, fn) => FLOWS.push([name, fn]);
+
+// A father in the tree with exactly one wife and children (wizard "I'm not listed" path), and a father whose
+// children have no listed mother (person-page dialogs).
+const WIZ_FATHER = people.find((p) => p.gender === 'm' && G.spouses(p.id).length === 1 && G.children(p.id).length >= 2 && G.father(p.id))?.id;
+const DLG_PERSON = people.find((p) => p.gender === 'm' && p.id !== WIZ_FATHER && G.children(p.id).length >= 3 && G.father(p.id) && !p.deceased)?.id;
+if (!WIZ_FATHER || !DLG_PERSON) throw new Error('could not pick flow test people');
+
+const draftOps = (page) => page.evaluate(() => globalThis.__gft.draft.ops.map((o) => JSON.parse(JSON.stringify(o))));
+const modalOpen = (page) => page.waitForSelector('dialog.modal[open]', { timeout: 5000 });
+const modalClosed = (page) => page.waitForFunction(() => !document.querySelector('dialog.modal[open]'), null, { timeout: 5000 });
+async function shot(page, name) {
+  await page.screenshot({ path: path.join(SHOTS, `flow-${name}.png`), fullPage: false });
+}
+function problemsOf(where, problems) { for (const p of problems) fail(where, p); problems.length = 0; }
+
+/** Decode every GFT code inside a wa.me / GitHub URL and return the proposal. */
+async function proposalFromUrl(href) {
+  const u = new URL(href);
+  const text = [...u.searchParams.values()].join('\n');
+  return decodeProposal(text);
+}
+
+flow('wizard → draft → WhatsApp code applies in final mode (ar, 360px)', async (browser) => {
+  const W = 'wizard';
+  const context = await newContext(browser, { lang: 'ar', width: 360, height: 740 });
+  const page = await context.newPage();
+  const problems = watch(page);
+  await load(page, '#/add-family');
+  await page.locator('.wiz-tile').nth(1).click(); // "I am not listed yet"
+  await page.fill('.picker-input', lineageName(G, WIZ_FATHER, 'ar'));
+  await page.waitForSelector('.picker-option');
+  await page.locator('.picker-option').first().click();
+  await page.waitForSelector('.wiz-other-parent .chip');
+  await page.locator('.wiz-other-parent .chip').first().click(); // his wife = my mother
+  const self = page.locator('.wiz-step-who .wiz-row').first();
+  await self.locator('.wiz-ar').fill('سلمان');
+  check(/salman/i.test(await self.locator('.wiz-en').inputValue()), W, 'English name is not filled in automatically');
+  await self.locator('.wiz-gender button[data-v="m"]').click();
+  await self.locator('.wiz-year').fill('١٩٩٠'); // Arabic-Indic digits are accepted
+  await shot(page, 'wizard-1-self');
+  await page.locator('.wiz-step-who .wiz-next').click();
+  await page.waitForSelector('.wiz-step-spouses');
+  check((await draftOps(page)).length === 1, W, 'self was not added to the draft');
+  const wife = page.locator('.wiz-step-spouses .wiz-row').last();
+  await wife.locator('.wiz-ar').fill('نورة');
+  if (await wife.locator('.wiz-gender button[data-v="f"]').count()) await wife.locator('.wiz-gender button[data-v="f"]').click();
+  await page.locator('.wiz-step-spouses .wiz-next').click();
+  await page.waitForSelector('.wiz-step-children');
+  const kids = [['ريم', 'f', '2015'], ['فيصل', 'm', '2017'], ['لمى', 'f', '2020']];
+  for (let i = 0; i < kids.length; i++) {
+    const union = page.locator('.wiz-union').first();
+    if (i > 0) { await union.locator('.wiz-another').click(); await page.waitForTimeout(150); }
+    const row = page.locator('.wiz-union').first().locator('.wiz-row').last();
+    await row.locator('.wiz-ar').fill(kids[i][0]);
+    await row.locator(`.wiz-gender button[data-v="${kids[i][1]}"]`).click();
+    await row.locator('.wiz-year').fill(kids[i][2]);
+  }
+  await shot(page, 'wizard-2-children');
+  await page.locator('.wiz-step-children .wiz-footer .wiz-next').click();
+  await page.waitForSelector('.wiz-step-review');
+  const lines = await page.locator('.wiz-review-list li').allInnerTexts();
+  check(lines.length === 5, W, `review lists ${lines.length} changes, expected 5`);
+  check(lines.some((l) => l.includes('سلمان')) && lines.some((l) => l.includes('لمى')), W, 'review lines do not name the new people');
+  check(await page.locator('.wiz-whatsapp').count() === 1, W, 'no "tell the owner on WhatsApp" link');
+  await shot(page, 'wizard-3-review');
+  await page.locator('.wiz-send').click();
+  await page.waitForSelector('.view-draft .draft-changes .draft-ops');
+  check((await page.locator('.draft-changes .draft-ops li').count()) === 5, W, 'draft page does not list the 5 changes');
+  // Public-data acknowledgement unlocks the send links.
+  await page.check('#draft-ack');
+  await page.waitForFunction(() => /GFT[01]:/.test(decodeURIComponent(document.querySelector('.draft-wa')?.getAttribute('href') || '')), null, { timeout: 10000 });
+  const wa = await page.locator('.draft-wa').getAttribute('href');
+  check(/^https:\/\/wa\.me\//.test(wa), W, `WhatsApp href is ${wa.slice(0, 40)}`);
+  const ghHref = await page.locator('a.draft-way').first().getAttribute('href');
+  check(ghHref && ghHref.includes('template=family-tree-proposal.yml') && /GFT[01]/.test(decodeURIComponent(ghHref)), W, 'GitHub issue link has no template/code');
+  await shot(page, 'wizard-4-draft');
+  const proposal = await proposalFromUrl(wa);
+  check(proposal.ops.length === 5, W, `decoded proposal has ${proposal.ops.length} ops`);
+  const r = applyProposal(DATA, proposal, { mode: 'final', now: new Date().toISOString(), issue: 1, actor: 'e2e' });
+  check(r.ok, W, `proposal does not apply in final mode: ${JSON.stringify(r.errors).slice(0, 300)}`);
+  if (r.ok) {
+    check(r.created.people.length === 5, W, `created ${r.created.people.length} people`);
+    check(validateData(r.data).ok, W, 'result does not validate');
+    const gg = buildGraph(r.data);
+    const salman = r.idMap[proposal.ops[0].ref];
+    check(gg.father(salman)?.id === WIZ_FATHER, W, 'self is not a child of the chosen father');
+    check(gg.children(salman).length === 3, W, 'self does not have 3 children');
+    check(gg.person(salman).birth.date === '1990', W, `birth year stored as ${gg.person(salman).birth.date}`);
+  }
+  problemsOf(W, problems);
+  await context.close();
+});
+
+/** Open "More options" and pick an item by its label. */
+async function moreOption(page, label) {
+  await page.click('.person-btn-more');
+  await modalOpen(page);
+  await page.locator('dialog.modal[open] .sheet-item', { hasText: label }).first().click();
+  await page.waitForTimeout(150);
+  await modalOpen(page);
+}
+/** Radios in dialogs are styled labels: click the label that wraps the input. */
+async function pickRadio(page, value) {
+  await page.locator(`dialog.modal[open] label:has(input[type="radio"][value="${value}"])`).first().click();
+  check(await page.locator(`dialog.modal[open] input[type="radio"][value="${value}"]`).first().isChecked(), 'dialogs', `radio ${value} not checked`);
+}
+const primaryAction = (page) => page.locator('dialog.modal[open] .modal-actions .btn-primary').last();
+
+let SENT_STATE = null; // handed from the dialogs flow to the approval flow
+
+flow('person-page dialogs (en, 360px)', async (browser) => {
+  const W = 'dialogs';
+  const context = await newContext(browser, { lang: 'en', width: 360, height: 740 });
+  const page = await context.newPage();
+  const problems = watch(page);
+  await load(page, `#/p/${DLG_PERSON}`);
+  // (1) add a child
+  await page.click('.person-btn-add');
+  await modalOpen(page);
+  await shot(page, 'dialogs-1-sheet');
+  await page.click('dialog.modal[open] .dlg-tile-child');
+  await page.waitForSelector('dialog.dlg-add-child[open]');
+  await page.locator('dialog.modal[open] input.form-input-ar[id$="-name"]').fill('يوسف');
+  await pickRadio(page, 'm');
+  await page.locator('dialog.modal[open] input.form-year').first().fill('2019');
+  await shot(page, 'dialogs-2-add-child');
+  await primaryAction(page).click();
+  await modalClosed(page);
+  let ops = await draftOps(page);
+  check(ops.length === 1 && ops[0].op === 'add-person' && ops[0].link?.as === 'child' && ops[0].link?.of === DLG_PERSON, W, `add child produced ${JSON.stringify(ops).slice(0, 200)}`);
+  await settle(page);
+  check(await page.locator('.draft-bar:not([hidden])').count() === 1, W, 'sticky "unsent changes" bar is not shown');
+  check((await page.locator('#app').innerText()).includes('Yousef'), W, 'new child is not shown on the person page');
+  // (2) mark the father as deceased
+  const fatherId = G.father(DLG_PERSON).id;
+  await load(page, `#/p/${fatherId}`);
+  await moreOption(page, 'Mark as');
+  await pickRadio(page, 'deceased');
+  await page.waitForTimeout(100);
+  await shot(page, 'dialogs-3-mark');
+  await primaryAction(page).click();
+  await modalClosed(page);
+  ops = await draftOps(page);
+  check(ops.length === 2 && ops[1].op === 'mark' && ops[1].mark === 'deceased' && ops[1].id === fatherId, W, `mark produced ${JSON.stringify(ops[1])}`);
+  await settle(page);
+  check(/may god have mercy|رحمه الله|rahimahu/i.test(await page.locator('#app').innerText()), W, 'deceased person page has no "may God have mercy" line');
+  check(!/[✝†✞]/.test(await page.locator('#app').innerText()), W, 'a cross symbol is shown for the deceased');
+  // (3) re-arrange children
+  await load(page, `#/p/${DLG_PERSON}`);
+  await moreOption(page, 'Re-arrange children');
+  await page.locator('dialog.modal[open] .dlg-order-down').first().click();
+  await shot(page, 'dialogs-4-reorder');
+  await primaryAction(page).click();
+  await modalClosed(page);
+  ops = await draftOps(page);
+  check(ops.length === 3 && ops[2].op === 'reorder-children', W, `reorder produced ${JSON.stringify(ops[2])}`);
+  // (4) request removal is blocked for a person with children
+  await moreOption(page, 'Request removal');
+  const blocked = await page.locator('dialog.modal[open] .notice-danger').count();
+  const removeBtn = await page.locator('dialog.modal[open] .modal-actions .btn-danger').count();
+  check(blocked === 1 && removeBtn === 0, W, 'removal of a person with children is not blocked');
+  await shot(page, 'dialogs-5-remove-blocked');
+  await page.click('dialog.modal[open] .modal-close');
+  await modalClosed(page);
+  check((await draftOps(page)).length === 3, W, 'blocked removal changed the draft');
+  // (5) the draft page lists the three changes; send via "copy code"
+  await load(page, '#/draft');
+  check((await page.locator('.draft-changes .draft-ops li').count()) === 3, W, 'draft does not list 3 changes');
+  await page.check('#draft-ack');
+  await page.locator('details.draft-other > summary').click();
+  await page.waitForFunction(() => !document.querySelector('button.draft-way')?.disabled, null, { timeout: 10000 });
+  await shot(page, 'dialogs-6-draft');
+  const draftId = await page.evaluate(() => globalThis.__gft.draft.id);
+  await page.locator('button.draft-way').click();
+  await page.waitForFunction(() => globalThis.__gft.sent.length === 1 && globalThis.__gft.draft.ops.length === 0, null, { timeout: 5000 });
+  await settle(page);
+  const clip = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''));
+  check(/^GFT[01]:/.test(clip), W, `clipboard holds ${clip.slice(0, 20)}`);
+  check(await page.locator('.draft-thanks').count() === 1, W, 'no thank-you card after sending');
+  await shot(page, 'dialogs-7-sent');
+  const sent = await page.evaluate(() => globalThis.__gft.sent[0]);
+  check(sent.id === draftId && sent.via === 'copy', W, `sent entry ${sent.id}/${sent.via}`);
+  if (clip) {
+    const decoded = await decodeProposal(clip);
+    check(decoded.id === draftId && decoded.ops.length === 3, W, 'copied code does not decode to the draft');
+  }
+  // #/me shows it as sent
+  await load(page, '#/me');
+  check(await page.locator('.me-prop-sent').count() === 1, W, '#/me does not list the sent proposal');
+  await shot(page, 'dialogs-8-me');
+  problemsOf(W, problems);
+  SENT_STATE = { context, page, sent, problems };
+});
+
+flow('approval simulation → toast, sent proposal disappears (en, 360px)', async () => {
+  const W = 'approval';
+  if (!SENT_STATE) { fail(W, 'needs the dialogs flow'); return; }
+  const { context, page, sent, problems } = SENT_STATE;
+  const proposal = sent.proposal;
+  const now = new Date().toISOString();
+  const r = applyProposal(DATA, proposal, { mode: 'final', now, issue: 4242, actor: 'gtsgate' });
+  check(r.ok, W, `sent proposal does not apply in final mode: ${JSON.stringify(r.errors).slice(0, 300)}`);
+  if (!r.ok) return;
+  const hash = await proposalHash(proposal);
+  const en = describeProposal(proposal, G, 'en');
+  const ar = describeProposal(proposal, G, 'ar');
+  const changelog = { entries: [{
+    issue: 4242, proposalId: proposal.id, hash, commit: 'abc1234', rev: r.data.meta.revision, at: now, title: en.title,
+    summary: { en: en.lines, ar: ar.lines }, submitter: { name: proposal.submitter?.name || '', relation: proposal.submitter?.relation || '' },
+    approvedBy: 'gtsgate', people: [...new Set([...r.created.people, ...r.touched.people])],
+    touched: { people: [...new Set([...r.touched.people, ...r.created.people])], unions: [...new Set([...r.touched.unions, ...r.created.unions])] },
+    destructive: false, action: 'apply',
+  }] };
+  const applied = { [hash]: { issue: 4242, proposalId: proposal.id, commit: 'abc1234', idMap: r.idMap, at: now, rev: r.data.meta.revision } };
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gft-site-'));
+  for (const entry of ['index.html', 'manifest.json', 'config.json', 'css', 'js', 'img', 'data']) fs.cpSync(path.join(SITE, entry), path.join(tmp, entry), { recursive: true });
+  fs.writeFileSync(path.join(tmp, 'data', 'family.json'), serializeData(r.data));
+  fs.writeFileSync(path.join(tmp, 'data', 'changelog.json'), `${JSON.stringify(changelog, null, 2)}\n`);
+  fs.writeFileSync(path.join(tmp, 'data', 'applied.json'), `${JSON.stringify(applied, null, 2)}\n`);
+  server.root = tmp;
+  try {
+    await load(page, '#/');
+    const toast = page.locator('.toast-success');
+    check(await toast.count() >= 1, W, 'no "your changes were approved" toast');
+    check(/approved/i.test(await toast.first().innerText().catch(() => '')), W, 'toast text does not say approved');
+    await shot(page, 'approval-1-toast');
+    const st = await page.evaluate(() => ({ sent: globalThis.__gft.sent.length, approved: globalThis.__gft.approved.length, rev: globalThis.__gft.data.meta.revision }));
+    check(st.sent === 0, W, `${st.sent} proposals still in the sent queue`);
+    check(st.approved === 1, W, 'approved history not recorded');
+    check(st.rev === DATA.meta.revision + 1, W, `revision ${st.rev}`);
+    await load(page, '#/me');
+    check(await page.locator('.me-prop-sent').count() === 0, W, '#/me still lists the proposal as sent');
+    check(await page.locator('.me-prop-approved').count() === 1, W, '#/me does not list the approved proposal');
+    await shot(page, 'approval-2-me');
+    const newChild = r.idMap[proposal.ops[0].ref];
+    await load(page, `#/p/${newChild}`);
+    const txt = await page.locator('#app').innerText();
+    check(/Yousef/.test(txt) && !/Not sent yet|awaiting approval/i.test(txt), W, 'approved child page wrong or still pending');
+    await load(page, '#/changes');
+    check(/#?4242/.test(await page.locator('#app').innerText()) || (await page.locator('#app .change-entry, #app li').count()) > 0, W, 'changes page does not show the approved entry');
+    await shot(page, 'approval-3-changes');
+  } finally {
+    server.root = SITE;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+  problemsOf(W, problems);
+  await context.close();
+});
+
+flow('admin paste → preview ✅ → approve-issue URL (ar, 1280px)', async (browser) => {
+  const W = 'admin';
+  const context = await newContext(browser, { lang: 'ar', width: 1280, height: 800 });
+  const page = await context.newPage();
+  const problems = watch(page);
+  const { code } = await sampleCode();
+  await load(page, '#/admin');
+  const message = `السلام عليكم\nهذه تعديلاتي\n\nرمز التعديلات — لا تغيّره / Change code — do not edit\n\`\`\`\n${code}\n\`\`\``;
+  await page.fill('#admin-paste', message);
+  await page.locator('.admin-section .btn-primary', { hasText: 'معاينة' }).first().click();
+  await page.waitForSelector('.preview-status', { timeout: 10000 });
+  check(await page.locator('.preview-status-ok').count() === 1, W, 'preview does not show ✅');
+  check((await page.locator('.preview-status-ok').innerText()).includes('✅'), W, 'no ✅ mark');
+  await page.waitForFunction(() => !!document.querySelector('.preview-approve')?.getAttribute('href'), null, { timeout: 10000 });
+  const href = await page.locator('.preview-approve').getAttribute('href');
+  const u = new URL(href);
+  check(u.searchParams.get('labels') === 'family-tree,approve', W, `labels=${u.searchParams.get('labels')}`);
+  check(u.searchParams.get('template') === 'family-tree-proposal.yml', W, 'approve URL without the issue template');
+  check(/GFT[01]:/.test(u.searchParams.get('code') || ''), W, 'approve URL without the code');
+  await shot(page, 'admin-1-preview');
+  // A removal request needs the separate deletion approval label.
+  const del = newProposal();
+  del.ops = [{ op: 'remove-person', id: LEAF, reasonCode: 'entered-by-mistake' }];
+  await page.fill('#admin-paste', await encodeProposal(del));
+  await page.locator('.admin-section .btn-primary', { hasText: 'معاينة' }).first().click();
+  await page.waitForFunction(() => /approve-deletion/.test(decodeURIComponent(document.querySelector('.preview-approve')?.getAttribute('href') || '')), null, { timeout: 10000 });
+  const delHref = new URL(await page.locator('.preview-approve').getAttribute('href'));
+  check(delHref.searchParams.get('labels') === 'family-tree,approve-deletion', W, `deletion labels=${delHref.searchParams.get('labels')}`);
+  await shot(page, 'admin-2-deletion');
+  // The preview route itself (link from the bot comment)
+  await load(page, `#/preview?code=${encodeURIComponent(code)}`);
+  check(await page.locator('.preview-status-ok').count() === 1, W, '#/preview?code= does not show ✅');
+  problemsOf(W, problems);
+  await context.close();
+});
 
 // ---------------------------------------------------------------------------------------------------------------
 async function main() {
