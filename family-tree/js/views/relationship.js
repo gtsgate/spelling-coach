@@ -7,7 +7,6 @@ import { t, register, lang } from '../i18n.js';
 import { store } from '../store.js';
 import { nameOf, lineageOf, avatar, nameLabel, personChip, yearsOf, badges, whatsappUrl } from '../ui.js';
 import { personPicker } from '../forms/picker.js';
-import { navigate } from '../app.js';
 import { findRelationship, relationLabel, pathSteps } from '../core/kinship.js';
 
 register({
@@ -130,9 +129,20 @@ function hashFor(a, b) {
   return '#/relationship';
 }
 
+let current = null; // {root, params} of the mounted view, for local re-renders
+
+/** Re-render in place (UI state such as `editing` changed, the route did not). */
+function rerender() {
+  if (!current || !current.root.isConnected) return;
+  current.root.replaceChildren();
+  render(current.root, current.params);
+}
+
 function go(a, b) {
   editing = null;
-  navigate(hashFor(a, b));
+  const next = hashFor(a, b);
+  if (location.hash === next) rerender();
+  else location.hash = next;
 }
 
 function slot({ which, person, missing, label, other, onPick }) {
@@ -150,10 +160,11 @@ function slot({ which, person, missing, label, other, onPick }) {
       onPick: (p) => onPick(p.id),
     });
     picker.querySelector('input')?.setAttribute('aria-label', label);
+    if (editing === which) requestAnimationFrame(() => picker.focus());
     body = h('div', { class: 'rel-slot-picker' },
       missing ? h('p', { class: 'notice notice-warning small' }, icon('warning'), h('span', null, t('rel.notFound'))) : null,
       picker,
-      person ? h('button', { type: 'button', class: 'btn btn-ghost btn-sm', on: { click: () => { editing = null; navigate(location.hash); } } }, t('rel.cancel')) : null);
+      person ? h('button', { type: 'button', class: 'btn btn-ghost btn-sm', on: { click: () => { editing = null; rerender(); } } }, t('rel.cancel')) : null);
   } else {
     body = h('div', { class: 'rel-person' },
       avatar(person, { size: 'lg' }),
@@ -162,7 +173,7 @@ function slot({ which, person, missing, label, other, onPick }) {
         lineageOf(person) !== nameOf(person) ? bdi(lineageOf(person), { class: 'rel-person-lineage muted small' }) : null,
         yearsOf(person) ? h('span', { class: 'muted small' }, yearsOf(person)) : null,
         h('span', { class: 'rel-person-badges' }, ...badges(person))),
-      h('button', { type: 'button', class: 'btn btn-sm rel-change', on: { click: () => { editing = which; navigate(location.hash); } } }, icon('edit', { size: 16 }), t('rel.change')));
+      h('button', { type: 'button', class: 'btn btn-sm rel-change', on: { click: () => { editing = which; rerender(); } } }, icon('edit', { size: 16 }), t('rel.change')));
   }
   return h('section', { class: ['rel-slot', `rel-slot-${which}`, person ? 'is-set' : ''], attrs: { 'aria-label': label } }, head, body);
 }
@@ -224,6 +235,7 @@ function result(graph, aP, bP) {
 }
 
 function render(root, params) {
+  current = { root, params };
   const graph = store.working;
   const rawA = clean(params.a);
   const rawB = clean(params.b);
