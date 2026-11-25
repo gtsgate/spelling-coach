@@ -541,7 +541,7 @@ export function personForm({ mode = 'add', person = null, context = {} } = {}) {
   const surBi = bilingualInputs({ id: surId, value: p.surname, kind: 'surname', maxLength: LIMITS.surname, placeholderAr: 'عالم', placeholderEn: 'Alem' });
   const surField = field({ label: t('pf.surname'), control: surBi.el, id: surId, hint: t('pf.surnameHint') });
   const nickId = uid('nick');
-  const nickBi = bilingualInputs({ id: nickId, value: p.nickname, kind: 'given', maxLength: LIMITS.nickname, placeholderAr: 'أبو خالد', placeholderEn: t('pf.nicknamePh') });
+  const nickBi = bilingualInputs({ id: nickId, value: p.nickname, kind: 'given', maxLength: LIMITS.nickname, placeholderAr: 'أبو خالد', placeholderEn: 'Abu Khalid' });
   const nickField = field({ label: t('pf.nickname'), control: nickBi.el, id: nickId, hint: t('pf.nicknameHint') });
 
   // --- life status ---------------------------------------------------------------------------------------

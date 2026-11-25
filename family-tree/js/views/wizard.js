@@ -16,7 +16,7 @@ import { nameOf, lineageOf, yearsOf, avatar, badges, ownerName, whatsappUrl } fr
 import { personPicker } from '../forms/picker.js';
 import { transliterate } from '../core/translit.js';
 import { toAsciiDigits, isValidDate, isValidHijri, gregorianToHijri } from '../core/dates.js';
-import { skeletonKey, looksLikeFullName } from '../core/names.js';
+import { skeletonKey, searchKey, looksLikeFullName } from '../core/names.js';
 import { formatIssue } from '../core/messages.js';
 import { refNames } from '../core/describe.js';
 import { LIMITS } from '../core/schema.js';
@@ -124,14 +124,11 @@ register({
     'wiz.restart': 'Start over',
     'wiz.skip': 'Skip',
     'wiz.next': 'Next',
-    'wiz.saveNext': 'Save & continue',
-    'wiz.toReview': 'Continue to review',
     'wiz.whatsapp': 'Tell {owner} on WhatsApp instead (voice notes welcome)',
     'wiz.reset': 'Your earlier entry is no longer in the proposal, so the steps started again.',
     'wiz.removed': 'Removed from your proposal.',
     'wiz.removedMore': 'Removed, together with {n} changes that depended on it.',
     'wiz.pendingLabel': 'Remove {name} from your proposal',
-    'wiz.saved': 'Saved to your proposal.',
   },
   ar: {
     'wiz.title': 'إضافة عائلتي',
@@ -233,14 +230,11 @@ register({
     'wiz.restart': 'البدء من جديد',
     'wiz.skip': 'تخطّي الخطوة',
     'wiz.next': 'التالي',
-    'wiz.saveNext': 'حفظ ومتابعة',
-    'wiz.toReview': 'المتابعة إلى المراجعة',
     'wiz.whatsapp': 'أو التواصل مع {owner} عبر واتساب بدلاً من ذلك (الرسائل الصوتية مرحّب بها)',
     'wiz.reset': 'لم يعد إدخالك السابق موجوداً في المقترح، لذا بدأت الخطوات من جديد.',
     'wiz.removed': 'حُذف من مقترحك.',
     'wiz.removedMore': 'حُذف ومعه {n} من التعديلات المرتبطة به.',
     'wiz.pendingLabel': 'حذف {name} من مقترحك',
-    'wiz.saved': 'حُفظ في مقترحك.',
   },
 });
 
@@ -261,6 +255,15 @@ let rowSeq = 0;
 let focusRowKey = null;
 let lastRoot = null;
 let lastQuery = {};
+/** id of the wizard input that had the focus — restored after re-renders triggered by store events. */
+let lastFocusId = null;
+if (typeof document !== 'undefined') {
+  document.addEventListener('focusin', (e) => {
+    const el = e.target;
+    if (el && el.id && el.id.startsWith('wiz-r')) lastFocusId = el.id;
+    else if (el && el !== document.body) lastFocusId = null;
+  });
+}
 
 function fresh(near = null) {
   return { step: STEP.WHO, path: null, self: null, anchor: null, near, stack: [] };
@@ -424,11 +427,12 @@ function removeFromDraft(ref) {
 // ---------------------------------------------------------------------------------------------------------------
 // Duplicate suggestions ("Is it one of these?")
 
-function sameGiven(p, typed) {
-  const k = skeletonKey(typed || '');
+function sameGiven(p, typed, { strict = false } = {}) {
+  const key = strict ? searchKey : skeletonKey;
+  const k = key(typed || '');
   if (!k) return false;
   const n = p?.name || {};
-  return [n.ar, n.en].some((x) => x && skeletonKey(x) === k);
+  return [n.ar, n.en].some((x) => x && key(x) === k);
 }
 
 /** [{person, action: 'link' | 'already' | 'me' | null}] for a row. ctx = {kind, F, S, anchor}. */
@@ -460,14 +464,14 @@ function candidatesFor(row, ctx) {
   } else if (ctx.kind === 'self-spouse') {
     for (const s of graph.spouses(ctx.anchor) || []) if (sameGiven(s.person, typed)) push(s.person, 'me');
   } else {
-    for (const r of graph.search(typed, { limit: 20 }) || []) if (sameGiven(r.person, typed) && genderOk(r.person)) push(r.person, null);
+    for (const r of graph.search(typed, { limit: 20 }) || []) if (sameGiven(r.person, typed, { strict: true }) && genderOk(r.person)) push(r.person, null);
   }
   return out.slice(0, 3);
 }
 
 function linkExisting(cand, ctx, row) {
   let op;
-  if (ctx.kind === 'child') op = { op: 'move-person', id: cand.id, to: { of: ctx.F, with: ctx.S || null } };
+  if (ctx.kind === 'child') op = { op: 'move-person', id: cand.id, to: { of: ctx.F, with: ctx.S || null }, unionRef: store.newUnionRef() };
   else if (ctx.kind === 'spouse') op = { op: 'link-spouse', a: ctx.F, b: cand.id, unionRef: store.newUnionRef() };
   if (!op) return;
   const ok = addOpsFor([op], [row], () => {
@@ -597,8 +601,14 @@ function rowEl(row, opts) {
     dup);
   rowBox.focusName = () => ar.focus();
   if (focusRowKey === row.key) {
-    focusRowKey = null;
-    requestAnimationFrame(() => { if (ar.isConnected) { ar.focus({ preventScroll: false }); ar.scrollIntoView({ block: 'center', behavior: 'smooth' }); } });
+    // Focus is (re)applied at the end of every render (a store event may re-render right after this one).
+    lastFocusId = ar.id;
+    requestAnimationFrame(() => {
+      if (!ar.isConnected || focusRowKey !== row.key) return;
+      focusRowKey = null;
+      const reduce = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      ar.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    });
   }
   return rowBox;
 }
@@ -765,7 +775,7 @@ function commitSelf() {
   let op;
   if (ui.choice === 'child') {
     const other = ui.otherParent && g().person(ui.otherParent) ? ui.otherParent : null;
-    op = { op: 'add-person', ref, person, link: { as: 'child', of: anchor.id, with: other } };
+    op = { op: 'add-person', ref, person, link: { as: 'child', of: anchor.id, with: other }, unionRef: store.newUnionRef() };
   } else {
     op = { op: 'add-person', ref, person, link: { as: 'spouse', of: anchor.id }, unionRef: store.newUnionRef() };
   }
@@ -894,9 +904,10 @@ function childGroups(F) {
   const unions = graph.unionsOf(F) || [];
   const list = unions.map((u) => {
     const S = (u.partners || []).find((x) => x !== F) || null;
-    return { union: u, S, key: `ch:${F}:${S || '-'}:${u.id}` };
+    // Keyed by partner set (unique among active unions), so a union created by the first committed row keeps its rows.
+    return { union: u, S, key: `ch:${F}:${S || '-'}` };
   });
-  if (!list.length) list.push({ union: null, S: null, key: `ch:${F}:-:none` });
+  if (!list.length) list.push({ union: null, S: null, key: `ch:${F}:-` });
   return list;
 }
 
@@ -905,7 +916,7 @@ function childrenStep() {
   const graph = g();
   const fp = graph.person(F);
   const groupsList = childGroups(F);
-  const makeOpFor = (S) => (r) => ({ op: 'add-person', ref: store.newRef(), person: personInput(r), link: { as: 'child', of: F, with: S || null } });
+  const makeOpFor = (S) => (r) => ({ op: 'add-person', ref: store.newRef(), person: personInput(r), link: { as: 'child', of: F, with: S || null }, unionRef: store.newUnionRef() });
   const commitAll = () => {
     for (const gr of groupsList) if (!commitGroup(gr.key, makeOpFor(gr.S))) return false;
     return true;
@@ -952,8 +963,8 @@ function parentsStep() {
   const mother = graph.mother(F);
   const sibs = graph.siblings(F) || { full: [], half: [], unspecified: [] };
   const sibList = [...sibs.full, ...sibs.half.map((x) => x.person), ...sibs.unspecified];
-  const parentOp = (r) => ({ op: 'add-person', ref: store.newRef(), person: personInput(r), link: { as: 'parent', of: F } });
-  const sibOp = (r) => ({ op: 'add-person', ref: store.newRef(), person: personInput(r), link: { as: 'sibling', of: F, share: 'both' } });
+  const parentOp = (r) => ({ op: 'add-person', ref: store.newRef(), person: personInput(r), link: { as: 'parent', of: F }, unionRef: store.newUnionRef() });
+  const sibOp = (r) => ({ op: 'add-person', ref: store.newRef(), person: personInput(r), link: { as: 'sibling', of: F, share: 'both' }, unionRef: store.newUnionRef() });
   const commitAll = () => (father || commitGroup(`par:m:${F}`, parentOp))
     && (mother || commitGroup(`par:f:${F}`, parentOp))
     && commitGroup(`sib:${F}`, sibOp);
@@ -1048,8 +1059,17 @@ function render(root, params, query = {}) {
     h('div', { class: 'wiz-body' }, body),
     h('div', { class: 'wiz-help' }, whatsappLink()),
   ].filter(Boolean));
+  if (lastFocusId) {
+    const want = lastFocusId;
+    requestAnimationFrame(() => {
+      const el = document.getElementById(want);
+      const cur = document.activeElement;
+      if (el && el !== cur && (!cur || cur === document.body || !cur.isConnected)) el.focus({ preventScroll: true });
+    });
+  }
   if (lastScrollTop) {
     lastScrollTop = false;
+    lastFocusId = null;
     requestAnimationFrame(() => { try { window.scrollTo({ top: 0 }); } catch { /* ignore */ } });
   }
 }

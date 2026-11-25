@@ -131,6 +131,9 @@
   .person-btn-more { grid-column: 1 / -1; min-block-size: var(--tap); }
 }
 @media (max-width: 420px) {
+  .person-actions .btn-lg:not(.person-btn-add) { padding-inline: 8px; gap: 6px; font-size: .94rem; }
+  .person-actions .btn-lg:not(.person-btn-add) .icon { inline-size: 16px; block-size: 16px; }
+  .person-actions .btn > span { white-space: normal; overflow: visible; line-height: 1.25; }
   .person-hero-top { flex-direction: column; align-items: center; text-align: center; gap: var(--s3); }
   .person-hero-id { align-items: center; }
   .person-name-other { align-self: center; }
@@ -219,6 +222,13 @@
 /* Not found */
 .person-notfound { gap: var(--s3); }
 .person-notfound-search { inline-size: min(100%, 480px); text-align: start; }
+
+@media (max-width: 400px) {
+  /* keep "Correct info" / "This is me" on one line on small phones */
+  .person-actions .btn-lg:not(.person-btn-add) .icon { display: none; }
+}
+:root[data-text-size="xl"] .person-actions { grid-template-columns: 1fr; }
+:root[data-text-size="xl"] .person-actions .btn { grid-column: auto; }
 
 @media print {
   .person-actions, .person-add-inline, .person-auto { display: none !important; }
