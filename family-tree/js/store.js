@@ -94,6 +94,7 @@ export const store = {
 
     // Drop sent proposals the changelog says were applied; learn their real ids.
     await Promise.all([this.loadChangelog().catch(() => null), this.loadApplied().catch(() => null)]);
+    this.remapTempIds();
     this.reconcileSent();
     this.recompute();
     this.ready = true;
@@ -132,6 +133,19 @@ export const store = {
     }
     this.appliedById = byId;
     return byId;
+  },
+
+  /** "This is me" / submitter set to a person who was pending (temp ref) → their real id once approved. */
+  remapTempIds() {
+    const real = (ref) => {
+      if (!ref || !/^new\d+$/.test(ref)) return ref;
+      for (const entry of Object.values(this.appliedById)) if (entry.idMap && entry.idMap[ref]) return entry.idMap[ref];
+      return ref;
+    };
+    const me = real(this.me);
+    if (me !== this.me) { this.me = me; saveJSON(ME_KEY, me); }
+    const sub = real(this.draft.submitter.personId);
+    if (sub !== this.draft.submitter.personId) { this.draft.submitter.personId = sub; this.persistDraft(); }
   },
 
   /** refMap seeded with real ids of temp refs declared by already-applied proposals this one depends on. */

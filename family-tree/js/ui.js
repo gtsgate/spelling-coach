@@ -52,9 +52,16 @@ export function yearsOf(person) {
   try { return yearsLabel(person, lang()) || ''; } catch { return ''; }
 }
 
+/** URL for a stored photo value: repo photos live in data/photos/ ("photos/<pid>.jpg" → "data/photos/<pid>.jpg"). */
+export function photoUrl(photo) {
+  const v = String(photo || '');
+  if (/^photos\//.test(v)) return `data/${v}`;
+  return /^https:\/\//.test(v) ? v : '';
+}
+
 /** May this person's photo be shown under the owner's privacy defaults? */
 export function photoAllowed(person) {
-  if (!person || !person.photo) return false;
+  if (!person || !photoUrl(person.photo)) return false;
   const policy = store.config?.privacyDefaults?.photos || 'all';
   if (policy === 'none') return false;
   if (policy === 'men-only' && person.gender !== 'm') return false;
@@ -69,7 +76,7 @@ export function avatar(person, { size = 'md' } = {}) {
   const cls = ['avatar', size !== 'md' ? `avatar-${size}` : '', genderClass];
   if (photoAllowed(person)) {
     return h('span', { class: cls },
-      h('img', { src: person.photo, alt: t('ui.photoOf', { name: nameOf(person) }), loading: 'lazy', referrerPolicy: 'no-referrer' }));
+      h('img', { src: photoUrl(person.photo), alt: t('ui.photoOf', { name: nameOf(person) }), loading: 'lazy', referrerPolicy: 'no-referrer' }));
   }
   let txt = '';
   try { txt = initials(person, lang()) || ''; } catch { txt = ''; }
