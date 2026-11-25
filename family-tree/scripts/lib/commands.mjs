@@ -9,11 +9,33 @@
 // Only the FIRST non-empty, non-quoted line counts; it must start with "/". Case-insensitive; trailing punctuation,
 // invisible marks and Arabic-Indic digits are tolerated. "skip" numbers are 1-based as shown in the bot comment
 // (ranges "3-5" allowed; separators "," "،" spaces "and" "و"); they are returned 0-based for ops.skipOps.
+// A hex word of 6–64 characters is taken as the fingerprint (shorter-than-16 ones are then refused as too short).
+//
+// Comments are written by anyone, so parsing is bounded: bodies are cut at MAX_BODY (GitHub's own limit) and the
+// command line at FIRST_LINE_MAX characters before any of the parsing below; nothing here is worse than linear.
 
 import { toAsciiDigits } from '../../js/core/dates.js';
 
 const INVISIBLE = /[​-‏⁠﻿؜‪-‮⁦-⁩]/g;
-const TRAILING_PUNCT = /[\s.,!?؟،;:؛…]+$/u;
+const TRAILING_PUNCT = new Set([...'.,!?؟،;:؛…']);
+
+/** Longest body parsed (GitHub limits issue and comment bodies to 65,536 characters). */
+export const MAX_BODY = 65536;
+/** Longest command line parsed (a full command with a 64-char fingerprint and a skip list fits easily). */
+export const FIRST_LINE_MAX = 200;
+
+/** A body as a string, cut at MAX_BODY. */
+export const clampBody = (body) => {
+  const s = String(body ?? '');
+  return s.length > MAX_BODY ? s.slice(0, MAX_BODY) : s;
+};
+
+/** Drop trailing whitespace and punctuation (a plain loop: a regex like /[.…]+$/ is quadratic on long runs). */
+function stripTrailing(s) {
+  let i = s.length;
+  while (i > 0 && (TRAILING_PUNCT.has(s[i - 1]) || /\s/.test(s[i - 1]))) i--;
+  return s.slice(0, i);
+}
 
 const COMMANDS = new Map([
   ['approve', 'approve'], ['approved', 'approve'], ['موافق', 'approve'], ['موافقة', 'approve'], ['اعتماد', 'approve'],
@@ -29,13 +51,13 @@ const SKIP_WORDS = new Set(['skip', 'skipping', 'except', 'تخطي', 'تخطّ�
 const FORCE_WORDS = new Set(['force', '--force', 'forced', 'فرض', 'إجبار', 'اجبار']);
 const CONNECTORS = new Set(['and', 'و', '&', ',', '،']);
 
-/** The first non-empty line that is not a quote ("> …"), cleaned. */
+/** The first non-empty line that is not a quote ("> …"), cleaned and cut at FIRST_LINE_MAX characters. */
 export function firstLine(body) {
-  for (const raw of String(body ?? '').split(/\r?\n/)) {
+  for (const raw of clampBody(body).split('\n')) {
     const line = raw.replace(INVISIBLE, '').trim();
     if (!line) continue;
     if (line.startsWith('>')) continue;
-    return line;
+    return line.slice(0, FIRST_LINE_MAX);
   }
   return '';
 }
@@ -66,7 +88,7 @@ function numbersOf(token) {
 export function parseCommand(body) {
   let line = firstLine(body);
   if (!line.startsWith('/')) return null;
-  line = toAsciiDigits(line).replace(TRAILING_PUNCT, '');
+  line = stripTrailing(toAsciiDigits(line));
   const tokens = line.slice(1).toLowerCase().split(/\s+/).filter(Boolean);
   if (!tokens.length) return null;
   let head = tokens.shift().replace(/[.,!?؟،:]+$/u, '');
@@ -101,7 +123,7 @@ export function parseCommand(body) {
       inSkip = false;
     }
     const fpTok = tok.replace(/^(?:fp[=:]|#)/, '');
-    if (!res.fp && /^[0-9a-f]{3,64}$/.test(fpTok) && !/^\d{1,2}$/.test(fpTok)) { res.fp = fpTok; continue; }
+    if (!res.fp && /^[0-9a-f]{6,64}$/.test(fpTok)) { res.fp = fpTok; continue; }
     res.extra.push(tok);
   }
   res.skipShown = [...skip].filter((n) => n >= 1).sort((a, b) => a - b);

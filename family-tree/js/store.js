@@ -39,6 +39,18 @@ function emptyDraft(submitter) {
   };
 }
 
+/** Deep-copy `value`, replacing every string that is a key of `map` (temp refs → other refs / real ids). */
+function rewriteRefs(value, map) {
+  if (typeof value === 'string') return Object.prototype.hasOwnProperty.call(map, value) ? map[value] : value;
+  if (Array.isArray(value)) return value.map((v) => rewriteRefs(v, map));
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = rewriteRefs(v, map);
+    return out;
+  }
+  return value;
+}
+
 const PREVIEW = () => ({ mode: 'preview', now: new Date().toISOString(), allowDestructive: true });
 
 export const store = {
@@ -98,6 +110,44 @@ export const store = {
     this.reconcileSent();
     this.recompute();
     this.ready = true;
+    // Another tab changed the draft / sent queue / "me" → adopt it (the same visitor uses several tabs).
+    try {
+      globalThis.addEventListener?.('storage', (e) => {
+        if (![DRAFT_KEY, SENT_KEY, ME_KEY, APPROVED_KEY].includes(e.key)) return;
+        if (this.syncFromStorage()) { this.recompute(); this.emit('draft'); this.emit('sent'); this.emit('me'); }
+      });
+    } catch { /* no window */ }
+  },
+
+  /**
+   * Re-read draft, sent queue, approved list and "me" from localStorage (another tab may have changed them).
+   * Returns true when anything differed. A draft whose id was already sent gets a fresh id.
+   */
+  syncFromStorage() {
+    let changed = false;
+    const d = loadJSON(DRAFT_KEY);
+    if (d && Array.isArray(d.ops) && JSON.stringify(d) !== JSON.stringify(this.draft)) {
+      this.draft = { ...emptyDraft(), ...d, submitter: { ...emptyDraft().submitter, ...(d.submitter || {}) } };
+      if (!this.draft.id) this.draft.id = newProposalId();
+      if (!Array.isArray(this.draft.dependsOn)) this.draft.dependsOn = [];
+      changed = true;
+    }
+    const sent = loadJSON(SENT_KEY);
+    if (Array.isArray(sent) && JSON.stringify(sent) !== JSON.stringify(this.sent)) {
+      this.sent = sent.filter((x) => x && x.proposal && Array.isArray(x.proposal.ops));
+      changed = true;
+    }
+    const approved = loadJSON(APPROVED_KEY);
+    if (Array.isArray(approved) && JSON.stringify(approved) !== JSON.stringify(this.approved)) { this.approved = approved; changed = true; }
+    const me = loadJSON(ME_KEY);
+    if ((me || null) !== (this.me || null)) { this.me = me || null; changed = true; }
+    if (this.sent.some((x) => x.id === this.draft.id)) {
+      // This draft was already sent (from another tab): its changes live in the sent queue now.
+      this.draft = emptyDraft(this.draft.submitter);
+      this.persistDraft();
+      changed = true;
+    }
+    return changed;
   },
 
   /** Replace canonical data (initial load or "publishing…" refresh). */
@@ -106,7 +156,9 @@ export const store = {
     this.base = buildGraph(this.data);
     if (!silent) {
       this.changelog = null;
-      Promise.all([this.loadChangelog(), this.loadApplied()]).then(() => { this.reconcileSent(); this.recompute(); this.emit('data'); }).catch(() => { this.recompute(); this.emit('data'); });
+      Promise.all([this.loadChangelog(), this.loadApplied()])
+        .then(() => { this.reconcileSent(); this.remapTempIds(); this.recompute(); this.emit('data'); })
+        .catch(() => { this.recompute(); this.emit('data'); });
     }
   },
 
@@ -146,6 +198,15 @@ export const store = {
     if (me !== this.me) { this.me = me; saveJSON(ME_KEY, me); }
     const sub = real(this.draft.submitter.personId);
     if (sub !== this.draft.submitter.personId) { this.draft.submitter.personId = sub; this.persistDraft(); }
+    // Draft ops built on people of a proposal that is now approved: use the real ids, drop the dependency.
+    const deps = this.draft.dependsOn || [];
+    const done = deps.filter((id) => this.appliedById[id]);
+    if (done.length) {
+      const map = this.appliedRefMap(done);
+      this.draft.ops = rewriteRefs(this.draft.ops, map);
+      this.draft.dependsOn = deps.filter((id) => !this.appliedById[id]);
+      this.persistDraft();
+    }
   },
 
   /** refMap seeded with real ids of temp refs declared by already-applied proposals this one depends on. */
@@ -270,6 +331,7 @@ export const store = {
    * if anything fails nothing is added and {ok:false, errors} is returned (op indexes are relative to the FULL draft).
    */
   addOps(ops) {
+    if (this.syncFromStorage()) this.recompute();
     const list = (Array.isArray(ops) ? ops : [ops]).map((o) => structuredClone(o));
     const trial = this.draftProposal();
     trial.ops.push(...list);
@@ -291,6 +353,8 @@ export const store = {
    * plus later ops that no longer apply. Returns the number of ops removed.
    */
   removeOp(i) {
+    // The list on screen may be stale if another tab changed the draft: refresh instead of removing the wrong change.
+    if (this.syncFromStorage()) { this.recompute(); this.emit('draft'); return 0; }
     if (i < 0 || i >= this.draft.ops.length) return 0;
     const before = this.draft.ops.length;
     const dead = new Set(opRefs(this.draft.ops[i]).declares);
@@ -321,9 +385,19 @@ export const store = {
 
   /** Replace the draft with a proposal (admin "correct this proposal" / preview "load into my draft"). */
   replaceDraft(proposal, { source = null } = {}) {
+    this.syncFromStorage();
     const d = emptyDraft(this.draft.submitter);
-    d.ops = (proposal.ops || []).map((o) => structuredClone(o));
-    d.submitter = { ...d.submitter, ...(proposal.submitter || {}) };
+    // Rename every temp ref the loaded proposal declares to a fresh ref of THIS browser, so it cannot collide
+    // with refs of proposals this visitor already sent (every browser starts at new1).
+    const renames = {};
+    for (const op of proposal.ops || []) {
+      for (const r of opRefs(op).declares) {
+        if (renames[r]) continue;
+        renames[r] = /^newu\d+$/.test(r) ? this.newUnionRef() : this.newRef();
+      }
+    }
+    d.ops = rewriteRefs(proposal.ops || [], renames);
+    d.submitter = { ...d.submitter, ...rewriteRefs(proposal.submitter || {}, renames) };
     d.note = proposal.note || '';
     d.dependsOn = [...(proposal.dependsOn || [])];
     d.source = source;
@@ -343,19 +417,22 @@ export const store = {
   },
 
   clearDraft() {
+    this.syncFromStorage();
     this.draft = emptyDraft(this.draft.submitter);
     this.touchDraft();
   },
 
   /** Called when the visitor sends the draft (WhatsApp / GitHub / email / copy). Moves it to the sent queue. */
   markSent(via) {
+    if (this.syncFromStorage()) this.recompute();
     if (!this.draft.ops.length) return null;
     const proposal = this.draftProposal();
     const entry = { id: proposal.id, at: new Date().toISOString(), via, proposal };
-    this.sent = [...this.sent.filter((s) => s.id !== entry.id), entry];
-    saveJSON(SENT_KEY, this.sent);
+    // Write the fresh empty draft BEFORE the sent queue, so other tabs never see the old draft as unsent.
     this.draft = emptyDraft(this.draft.submitter);
     this.persistDraft();
+    this.sent = [...this.sent.filter((s) => s.id !== entry.id), entry];
+    saveJSON(SENT_KEY, this.sent);
     this.recompute();
     this.emit('sent');
     this.emit('draft');
@@ -386,8 +463,8 @@ export const store = {
     this.emit('sent');
   },
 
-  setSubmitter(patch) { Object.assign(this.draft.submitter, patch); this.persistDraft(); },
-  setNote(note) { this.draft.note = note; this.persistDraft(); },
+  setSubmitter(patch) { this.syncFromStorage(); Object.assign(this.draft.submitter, patch); this.persistDraft(); },
+  setNote(note) { this.syncFromStorage(); this.draft.note = note; this.persistDraft(); },
 
   touchDraft() {
     this.draft.updatedAt = new Date().toISOString();

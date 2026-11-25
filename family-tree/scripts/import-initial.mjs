@@ -60,6 +60,8 @@ function P(ar, en, gender, opts = {}) {
   if (gender) p.gender = gender;
   if (opts.bio) p.bio = bi(...opts.bio);
   if (opts.needsInfo) { p.tags = ['needs-info']; p.needsInfo = opts.needsInfo; }
+  // Living relatives' birth dates are published as the year only (no dates are known yet; protective default).
+  p.privacy = 'year';
   p.history = [{ issue: null, at: NOW, action: 'import' }];
   people[id] = p;
   return id;

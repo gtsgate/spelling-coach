@@ -96,6 +96,16 @@ function refText(entry, lang) {
   if (!('name' in input) && !('nickname' in input) && !('nameStatus' in input) && ('ar' in input || 'en' in input)) {
     return String((lang === 'en' ? input.en || input.ar : input.ar || input.en) || '').trim();
   }
+  // A new person whose name is withheld / not known: say so instead of a misleading "Unknown".
+  const status = input.nameStatus;
+  const nick = isObj(input.nickname) && String(input.nickname.ar || input.nickname.en || '').trim();
+  if ((status === 'withheld' || status === 'unknown') && !nick) {
+    const sur = isObj(input.surname) ? String((lang === 'en' ? input.surname.en || input.surname.ar : input.surname.ar || input.surname.en) || '').trim() : '';
+    const base = status === 'withheld'
+      ? (lang === 'en' ? 'name withheld' : 'الاسم محجوب')
+      : (lang === 'en' ? 'name not known' : 'الاسم غير معروف');
+    return sur ? `${base} — ${sur}` : base;
+  }
   return fullName(input, lang);
 }
 

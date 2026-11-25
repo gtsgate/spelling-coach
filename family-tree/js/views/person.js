@@ -12,13 +12,13 @@ import { nameOf, lineageOf, avatar, badges, personChip, yearsOf, spinner } from 
 import { navigate } from '../app.js';
 import { personPicker } from '../forms/picker.js';
 import {
-  openAddRelativeSheet, openAddRelative, openEditPerson, openMoreOptions, openMerge,
+  openAddRelativeSheet, openAddRelative, openEditPerson, openMoreOptions, openMerge, openMarriageDetails,
 } from '../forms/dialogs.js';
 import { formatDate } from '../core/dates.js';
 import { isAutoEnglish } from '../core/translit.js';
 import { personName, displayName } from '../core/names.js';
 import { findRelationship, relationLabel } from '../core/kinship.js';
-import { isPersonId } from '../core/schema.js';
+import { isPersonId, isUnionId } from '../core/schema.js';
 
 register({
   en: {
@@ -95,6 +95,7 @@ register({
     'person.noDetails': 'No details have been added yet.',
     'person.addDetails': 'Add details',
     'person.needsInfo': 'Information needed',
+    'person.marriageDetails': 'Marriage details',
     'person.iKnow': 'I know this',
     'person.duplicateOf': 'This record may be the same person as:',
     'person.merge': 'Merge the two records',
@@ -181,6 +182,7 @@ register({
     'person.noDetails': 'لم تُضف تفاصيل بعد.',
     'person.addDetails': 'إضافة تفاصيل',
     'person.needsInfo': 'معلومات مطلوبة',
+    'person.marriageDetails': 'تفاصيل الزواج',
     'person.iKnow': 'لديّ هذه المعلومة',
     'person.duplicateOf': 'قد يكون هذا السجل للشخص نفسه في:',
     'person.merge': 'دمج السجلين',
@@ -369,7 +371,17 @@ function spousesSection(P) {
   const spouses = graph.spouses(P.id);
   return sectionCard('spouses', 'heart', spouses.length > 1 ? t('person.spousesMany') : t('person.spouses'), spouses.length > 1 ? spouses.length : 0,
     spouses.length
-      ? h('div', { class: 'person-rel-grid' }, spouses.map((s) => relChip(s.person, spouseRole(P, s.person, s.union), marriageText(s.union) || null)))
+      ? h('div', { class: 'person-rel-grid' }, spouses.map((s) => {
+        const chip = relChip(s.person, spouseRole(P, s.person, s.union), marriageText(s.union) || null);
+        if (isUnionId(s.union?.id) || /^newu\d+$/.test(s.union?.id || '')) {
+          chip.append(h('button', {
+            type: 'button', class: 'btn btn-sm btn-ghost person-marriage-btn',
+            attrs: { 'aria-label': `${t('person.marriageDetails')} — ${nameOf(s.person)}` },
+            on: { click: () => call(openMarriageDetails, P.id, s.union.id) },
+          }, icon('edit', { size: 14 }), h('span', null, t('person.marriageDetails'))));
+        }
+        return chip;
+      }))
       : emptyLine(t('person.addSpouse'), () => call(openAddRelative, P.id, 'spouse')));
 }
 

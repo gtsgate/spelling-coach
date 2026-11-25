@@ -437,8 +437,9 @@ export function personForm({ mode = 'add', person = null, context = {} } = {}) {
     nsTouched: !isAdd,
     gender: fixedGender || p.gender || context.defaultGender || '',
     deceased: !!p.deceased,
-    privacy: isAdd ? (p.deceased ? 'full' : 'year') : (p.privacy || 'full'),
-    privTouched: !isAdd,
+    privacy: initialPrivacy(p, isAdd),
+    // Untouched privacy follows life status; in edit mode an untouched value is only sent with a birth-date change.
+    privTouched: false,
     minor: false,
   };
   if (isAdd && state.gender === 'f' && femaleDefault !== 'known') state.nameStatus = femaleDefault;
@@ -757,7 +758,8 @@ export function personForm({ mode = 'add', person = null, context = {} } = {}) {
 
     const set = {};
     const put = (path) => { if (!same(next[path], cur[path])) set[path] = next[path]; };
-    ['nameStatus', 'name.ar', 'name.en', 'surname.ar', 'surname.en', 'nickname.ar', 'nickname.en', 'gender', 'privacy'].forEach(put);
+    ['nameStatus', 'name.ar', 'name.en', 'surname.ar', 'surname.en', 'nickname.ar', 'nickname.en', 'gender'].forEach(put);
+    if (state.privTouched) put('privacy');
     // An English spelling stored equal to the automatic one stays (it is not a change).
     for (const k of ['name', 'surname', 'nickname']) {
       if (set[`${k}.en`] === '' && cur[`${k}.ar`] === next[`${k}.ar`] && cur[`${k}.en`] === transliterate(cur[`${k}.ar`], { kind: k === 'surname' ? 'surname' : 'given' })) delete set[`${k}.en`];
@@ -765,6 +767,12 @@ export function personForm({ mode = 'add', person = null, context = {} } = {}) {
     if (set.nameStatus && r.ns !== 'known') { set['name.ar'] = ''; set['name.en'] = ''; if (!cur['name.ar']) delete set['name.ar']; if (!cur['name.en']) delete set['name.en']; }
 
     dateDiff('birth', r.b, p.birth, set);
+    // Privacy the visitor did not touch: a living person's changed birth date is published as the year only (the
+    // default for the living); minors never keep a full date. (Choosing "full date" explicitly is sent as chosen.)
+    if (!state.privTouched) {
+      const birthChanged = ['birth.date', 'birth.hijri'].some((k) => set[k]);
+      if ((birthChanged || minor) && !same(state.privacy, cur.privacy)) set.privacy = state.privacy;
+    }
     if (state.deceased !== !!p.deceased) set.deceased = state.deceased;
     if (state.deceased && r.d) dateDiff('death', r.d, p.death, set);
     if (state.deceased && !same(trim(deathPlace.value), p.death.place?.[L] || '')) set[`death.place.${L}`] = trim(deathPlace.value);
@@ -794,6 +802,20 @@ export function personForm({ mode = 'add', person = null, context = {} } = {}) {
 
 // ---------------------------------------------------------------------------------------------------------
 // helpers for the edit diff
+
+/**
+ * Birth-date privacy the form starts with. New people: "year" for the living, "full" for the deceased. Existing
+ * living people start at "year" (or "hidden" when stored so) — except a full date already published with
+ * privacy "full", which stays as approved; deceased people keep what is stored.
+ */
+function initialPrivacy(p, isAdd) {
+  if (isAdd) return p.deceased ? 'full' : 'year';
+  const stored = p.privacy || 'full';
+  if (p.deceased) return stored;
+  if (stored === 'hidden') return 'hidden';
+  const detailed = /^\d{4}-\d{2}/.test(p.birth?.date || '') || /^\d{1,4}-\d{2}/.test(p.birth?.hijri || '');
+  return stored === 'full' && detailed ? 'full' : 'year';
+}
 
 function getPath(obj, path) {
   let cur = obj;

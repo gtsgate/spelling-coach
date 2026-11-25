@@ -271,6 +271,7 @@ async function render() {
     // page load, so the first Tab still reaches the skip link and the header.
     if (!firstRender) main.focus({ preventScroll: true });
   }
+  announceApprovals();
 }
 
 function notFound() {
@@ -329,10 +330,13 @@ async function boot() {
   store.on('me', render);
   store.on('sent', render);
   await render();
-  if (store.justApproved.length) {
-    toast(t('shell.approved'), { type: 'success', timeout: 9000, action: { label: t('nav.changes'), href: '#/changes' } });
-    store.justApproved = [];
-  }
+}
+
+/** "Your changes were approved" — after boot or when the page picks up a newly published revision. */
+function announceApprovals() {
+  if (!store.justApproved.length) return;
+  store.justApproved = [];
+  toast(t('shell.approved'), { type: 'success', timeout: 9000, action: { label: t('nav.changes'), href: '#/changes' } });
 }
 
 boot();

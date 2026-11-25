@@ -6,6 +6,7 @@
 //   applyProposal(data, p, opts)            → {ok, data, errors, warnings, idMap, touched, created, destructive, reparent, merges}
 //   applyProposals(data, [p…], opts)        → the same, for several proposals in sequence (failing ones are skipped)
 //   isDestructive(p) · newProposal() · opRefs(op) → {declares, uses} · proposalHash(p) (async) · skipOps(p, indexes)
+//   FP_LENGTH · fingerprintOf(hash)        the approval fingerprint: the first 16 hex chars (64 bits) of proposalHash
 //   OPS_ERROR_CODES · OPS_WARNING_CODES · OPS_ISSUE_CODES
 //
 // Conventions
@@ -327,6 +328,15 @@ export async function proposalHash(p) {
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+
+/**
+ * Length of the fingerprint the owner types in "/approve <fp>" (docs/SPEC.md §6.2): 16 hex chars = 64 bits, so no
+ * second proposal with the same fingerprint can be ground out (6 chars = 24 bits took seconds).
+ */
+export const FP_LENGTH = 16;
+
+/** The fingerprint of a proposalHash (its first FP_LENGTH hex chars; '' when there is no hash). */
+export const fingerprintOf = (hash) => String(hash || '').slice(0, FP_LENGTH);
 
 // =========================================================================================================
 // validateProposal

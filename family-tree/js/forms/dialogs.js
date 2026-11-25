@@ -233,6 +233,24 @@ register({
     'dlg.opt.tree': 'View in the tree',
     'dlg.opt.ancestors': 'View ancestors',
     'dlg.opt.related': 'How are we related?',
+    'dlg.opt.marriage': 'Marriage details',
+    'dlg.opt.marriageHint': 'Status, date and place of a marriage',
+    'dlg.marriage': 'Marriage details',
+    'dlg.marriageWith': 'Marriage to {name}',
+    'dlg.whichMarriage': 'Which marriage?',
+    'dlg.marriageStatus': 'Status',
+    'dlg.mstatus.married': 'Married',
+    'dlg.mstatus.divorced': 'Ended (divorce)',
+    'dlg.mstatus.divorcedHint': 'Shown like any marriage on the site.',
+    'dlg.mstatus.widowed': 'Ended by a death',
+    'dlg.mstatus.unknown': 'Not known',
+    'dlg.marriageDate': 'Date of marriage (optional)',
+    'dlg.divorceDate': 'Date it ended (optional)',
+    'dlg.marriagePlace': 'Place of marriage (optional)',
+    'dlg.marriageNote': 'Note (optional)',
+    'dlg.marriageNotePh': 'e.g. remarried in 1980',
+    'dlg.noMarriage': 'No marriage is recorded for {name} yet.',
+    'dlg.cannotEditNewUnion': 'This marriage is part of a change that is not sent yet; its details can be added once it is approved.',
     'dlg.opt.remove': 'Request removal',
     'dlg.shareText': '{name} — on our family tree:\n{link}',
     'dlg.invite': 'Invite a relative',
@@ -435,6 +453,24 @@ register({
     'dlg.opt.tree': 'العرض في الشجرة',
     'dlg.opt.ancestors': 'عرض الأجداد',
     'dlg.opt.related': 'ما صلة القرابة؟',
+    'dlg.opt.marriage': 'تفاصيل الزواج',
+    'dlg.opt.marriageHint': 'حالة الزواج وتاريخه ومكانه',
+    'dlg.marriage': 'تفاصيل الزواج',
+    'dlg.marriageWith': 'الزواج من {name}',
+    'dlg.whichMarriage': 'أيّ زواج؟',
+    'dlg.marriageStatus': 'الحالة',
+    'dlg.mstatus.married': 'زواج قائم',
+    'dlg.mstatus.divorced': 'انتهى بالطلاق',
+    'dlg.mstatus.divorcedHint': 'يظهر في الموقع كأي زواج آخر.',
+    'dlg.mstatus.widowed': 'انتهى بالوفاة',
+    'dlg.mstatus.unknown': 'غير معروفة',
+    'dlg.marriageDate': 'تاريخ الزواج (اختياري)',
+    'dlg.divorceDate': 'تاريخ انتهائه (اختياري)',
+    'dlg.marriagePlace': 'مكان الزواج (اختياري)',
+    'dlg.marriageNote': 'ملاحظة (اختيارية)',
+    'dlg.marriageNotePh': 'مثال: تجدّد الزواج عام 1980',
+    'dlg.noMarriage': 'لا يوجد زواج مسجّل لـ{name} بعد.',
+    'dlg.cannotEditNewUnion': 'هذا الزواج جزء من تعديل لم يُرسل بعد؛ يمكن إضافة تفاصيله بعد الموافقة عليه.',
     'dlg.opt.remove': 'طلب الحذف',
     'dlg.shareText': '{name} — في شجرة عائلتنا:\n{link}',
     'dlg.invite': 'دعوة قريب',
@@ -939,6 +975,13 @@ export function openAddRelative(personId, as = 'child') {
     };
   }
 
+  if (as === 'spouse') {
+    q.spouseStatus = radioCards({
+      legend: t('dlg.spouseStatus'), value: 'current',
+      options: [{ value: 'current', label: t('dlg.current') }, { value: 'former', label: t('dlg.former') }],
+    });
+  }
+
   const form = blocked ? null : personForm({ mode: 'add', context: formCtx });
 
   // --- steps ----------------------------------------------------------------------------------------------
@@ -948,6 +991,7 @@ export function openAddRelative(personId, as = 'child') {
     q.share ? q.share.el : null,
     q.siblingOtherWrap || null,
     form ? h('div', { class: 'dlg-form-wrap' }, form.el) : null,
+    q.spouseStatus ? q.spouseStatus.el : null,
     q.kindWrap || null);
 
   function showForm() {
@@ -1018,7 +1062,7 @@ export function openAddRelative(personId, as = 'child') {
         if (as === 'child') {
           const other = q.other.value;
           r = linkOps(personId, 'child', cand.id, { withId: other.startsWith('s:') ? other.slice(2) : null, kind: q.kind.value });
-        } else if (as === 'spouse') r = linkOps(personId, 'spouse', cand.id, {});
+        } else if (as === 'spouse') r = linkOps(personId, 'spouse', cand.id, { former: q.spouseStatus?.value === 'former' });
         else if (as === 'parent') r = linkOps(personId, 'parent', cand.id, { scope: q.scope ? q.scope.value : 'union' });
         else r = linkOps(personId, 'sibling', cand.id, { share: q.share.value, otherParent: q.siblingOther ? q.siblingOther.value || null : null });
         if (r.error) return issues.show('danger', r.error);
@@ -1079,7 +1123,8 @@ export function openAddRelative(personId, as = 'child') {
         ops.push({ op: 'add-person', ref, person: input, link: { as: 'child', of: personId, with: withId }, unionRef: store.newUnionRef() });
       }
     } else if (as === 'spouse') {
-      ops.push({ op: 'add-person', ref, person: input, link: { as: 'spouse', of: personId, status: 'married' }, unionRef: store.newUnionRef() });
+      const status = q.spouseStatus?.value === 'former' ? 'divorced' : 'married';
+      ops.push({ op: 'add-person', ref, person: input, link: { as: 'spouse', of: personId, status }, unionRef: store.newUnionRef() });
     } else if (as === 'parent') {
       ops.push({ op: 'add-person', ref, person: input, link: { as: 'parent', of: personId, scope: q.scope ? q.scope.value : 'union' }, unionRef: store.newUnionRef() });
     } else {
@@ -1370,7 +1415,9 @@ export function openReorderChildren(personId) {
 
   function showUnion(u) {
     const kids = graph.childrenOfUnion(u.id);
-    const before = kids.map((c) => c.id);
+    const shown = kids.map((c) => c.id);
+    // beforeOrder is the union's RAW children list (soft-removed children included), exactly as stored.
+    const before = [...(graph.union(u.id)?.children || u.children || shown)];
     const sorter = sortableList(kids.map((c) => ({ id: c.id, node: childNode(c), person: c })), { label: (it) => nameOf(it.person) });
     const withYears = kids.filter((c) => graph.person(c.id) && Number.isFinite(Number(String(c.birth?.date || '').slice(0, 4))) && c.birth?.date);
     const sortBtn = withYears.length >= 2 ? h('button', {
@@ -1396,7 +1443,7 @@ export function openReorderChildren(personId) {
         onClick: () => {
           issues.clear();
           const order = sorter.order();
-          if (order.join() === before.join()) { issues.show('info', t('dlg.nothingChanged')); return; }
+          if (order.join() === shown.join()) { issues.show('info', t('dlg.nothingChanged')); return; }
           commit(shell, issues, [{ op: 'reorder-children', union: u.id, order, beforeOrder: before }]);
         },
       },
@@ -1421,6 +1468,131 @@ export function openReorderChildren(personId) {
     shell.setBody(targetCard(P, ''), h('p', { class: 'muted' }, t('dlg.nothingToReorder')));
     shell.setActions([{ label: t('dlg.close'), variant: 'ghost', onClick: () => shell.close(false) }]);
   } else if (unions.length === 1) showUnion(unions[0]);
+  else pickUnion();
+  return shell.promise;
+}
+
+// =========================================================================================================
+// openMarriageDetails — status, marriage date (م/هـ), end date, place, note → edit-union with `before`
+
+/** Active two-partner unions of a person (marriages), in display order. */
+function marriagesOf(graph, personId) {
+  return graph.unionsOf(personId).filter((u) => (u.partners || []).length === 2 && (u.partners || []).every((x) => graph.person(x)));
+}
+
+/** `${which}.date|hijri|approx` changes between a dateInput reading and the stored union date. */
+function unionDateDiff(which, r, cur, set) {
+  if (!r || r.error) return;
+  const curDate = cur?.date || '';
+  const curHijri = cur?.hijri || '';
+  if (r.empty) {
+    if (curDate || curHijri) { set[`${which}.date`] = ''; if (curHijri) set[`${which}.hijri`] = ''; }
+    if (cur?.approx) set[`${which}.approx`] = false;
+    return;
+  }
+  if (r.hijri) { if (r.hijri !== curHijri) set[`${which}.hijri`] = r.hijri; }
+  else if (curHijri || r.date !== curDate) set[`${which}.date`] = r.date;
+  if (!!r.approx !== !!cur?.approx) set[`${which}.approx`] = !!r.approx;
+}
+
+const unionPath = (u, path) => {
+  let cur = u;
+  for (const k of path.split('.')) cur = cur == null ? undefined : cur[k];
+  if (cur === undefined || cur === null) return path.endsWith('.approx') ? false : '';
+  return cur;
+};
+
+export function openMarriageDetails(personId, unionId = null) {
+  const graph = g();
+  const P = graph.person(personId);
+  if (!P) return notFoundShell(personId);
+  const shell = openShell({ title: t('dlg.marriage'), size: 'md', className: 'dlg-marriage' });
+  const issues = issuesBox();
+  const unions = marriagesOf(graph, personId);
+  const partnerOf = (u) => graph.person((u.partners || []).find((x) => x !== personId));
+  const L = lang();
+
+  function showUnion(u) {
+    const S = partnerOf(u);
+    const back = unions.length > 1 && !unionId
+      ? { label: t('dlg.back'), variant: 'ghost', icon: 'chevronStart', className: 'dlg-back', onClick: pickUnion }
+      : { label: t('dlg.cancel'), variant: 'ghost', onClick: () => shell.close(false) };
+    if (!referenceableUnion(u.id)) {
+      shell.setBody(targetCard(P, ''), h('div', { class: 'notice notice-info' }, icon('info'), h('p', null, t('dlg.cannotEditNewUnion'))));
+      shell.setActions([back]);
+      return;
+    }
+    const status = radioCards({
+      legend: t('dlg.marriageStatus'), value: u.status || 'unknown', className: 'dlg-mstatus',
+      options: [
+        { value: 'married', label: t('dlg.mstatus.married') },
+        { value: 'divorced', label: t('dlg.mstatus.divorced'), hint: store.config?.showDivorce ? '' : t('dlg.mstatus.divorcedHint') },
+        { value: 'widowed', label: t('dlg.mstatus.widowed') },
+        { value: 'unknown', label: t('dlg.mstatus.unknown') },
+      ],
+      onChange: (v) => { dField.el.hidden = v !== 'divorced'; },
+    });
+    const mId = `dlg-mdate-${++dlgSeq}`;
+    const mDate = dateInput({ id: mId, value: u.marriage || {}, onChange: () => mField.setError('') });
+    const mField = field({ label: t('dlg.marriageDate'), control: mDate.el, id: mId });
+    const dId = `dlg-ddate-${++dlgSeq}`;
+    const dDate = dateInput({ id: dId, value: u.divorce || {}, onChange: () => dField.setError('') });
+    const dField = field({ label: t('dlg.divorceDate'), control: dDate.el, id: dId });
+    dField.el.hidden = status.value !== 'divorced';
+    const placeId = `dlg-mplace-${++dlgSeq}`;
+    const place = h('input', { id: placeId, class: 'input', type: 'text', dir: 'auto', maxLength: LIMITS.place, value: u.marriage?.place?.[L] || '' });
+    const placeField = field({ label: t('dlg.marriagePlace'), control: place, id: placeId });
+    const noteId = `dlg-mnote-${++dlgSeq}`;
+    const note = h('textarea', { id: noteId, class: 'textarea', rows: 2, dir: 'auto', maxLength: LIMITS.unionNote, placeholder: t('dlg.marriageNotePh') });
+    note.value = u.note?.[L] || '';
+    const noteField = field({ label: t('dlg.marriageNote'), control: note, id: noteId });
+    shell.setTitle(S ? t('dlg.marriageWith', { name: nameOf(S) }) : t('dlg.marriage'));
+    shell.setBody(targetCard(P, ''), S ? targetCard(S, '') : null, issues.el, status.el, mField.el, dField.el, placeField.el, noteField.el);
+    shell.setActions([
+      back,
+      {
+        label: t('dlg.saveToDraft'), variant: 'primary', icon: 'check', primary: true,
+        onClick: () => {
+          issues.clear();
+          const m = mDate.read();
+          if (m.error) { mField.setError(m.error); mDate.focus(); return; }
+          const d = status.value === 'divorced' ? dDate.read() : null;
+          if (d && d.error) { dField.setError(d.error); dDate.focus(); return; }
+          const set = {};
+          if (status.value !== (u.status || 'unknown')) set.status = status.value;
+          unionDateDiff('marriage', m, u.marriage, set);
+          if (d) unionDateDiff('divorce', d, u.divorce, set);
+          if (trim(place.value) !== (u.marriage?.place?.[L] || '')) set[`marriage.place.${L}`] = trim(place.value);
+          if (trim(note.value) !== (u.note?.[L] || '')) set[`note.${L}`] = trim(note.value);
+          if (!Object.keys(set).length) { issues.show('info', t('dlg.nothingChanged')); return; }
+          const before = {};
+          for (const path of Object.keys(set)) before[path] = unionPath(u, path);
+          commit(shell, issues, [{ op: 'edit-union', union: u.id, set, before }]);
+        },
+      },
+    ]);
+  }
+
+  function pickUnion() {
+    shell.setTitle(t('dlg.marriage'));
+    const choice = radioCards({
+      legend: t('dlg.whichMarriage'), value: '',
+      options: unions.map((u) => {
+        const S = partnerOf(u);
+        return { value: u.id, label: S ? nameOf(S) : t('common.unknown'), hint: S ? lineageOf(S) : '', lead: S ? avatar(S, { size: 'sm' }) : null };
+      }),
+      onChange: (id) => showUnion(unions.find((u) => u.id === id)),
+    });
+    shell.setBody(targetCard(P, ''), choice.el);
+    shell.setActions([{ label: t('dlg.cancel'), variant: 'ghost', onClick: () => shell.close(false) }]);
+    setTimeout(() => choice.inputs[0]?.focus(), 30);
+  }
+
+  const wanted = unionId ? unions.find((u) => u.id === unionId) : null;
+  if (!unions.length) {
+    shell.setBody(targetCard(P, ''), h('p', { class: 'muted' }, t('dlg.noMarriage', { name: nameOf(P) })));
+    shell.setActions([{ label: t('dlg.close'), variant: 'ghost', onClick: () => shell.close(false) }]);
+  } else if (wanted || unions.length === 1) showUnion(wanted || unions[0]);
   else pickUnion();
   return shell.promise;
 }
@@ -1893,6 +2065,7 @@ export function openMoreOptions(personId) {
 
   const hasChildrenToOrder = graph.unionsOf(personId).some((u) => graph.childrenOfUnion(u.id).length >= 2);
   const hasSpousesToOrder = graph.unionsOf(personId).length >= 2;
+  const hasMarriage = marriagesOf(graph, personId).length > 0;
   const me = store.me && store.me !== personId ? store.me : null;
   const relHash = me ? `#/relationship/${encodeURIComponent(me)}/${encodeURIComponent(personId)}` : `#/relationship/_/${encodeURIComponent(personId)}`;
 
@@ -1902,6 +2075,7 @@ export function openMoreOptions(personId) {
       item('flag', t('dlg.opt.mark'), pick(openMarkAs), { hint: t('dlg.opt.markHint') }),
       hasChildrenToOrder ? item('list', t('dlg.opt.reorderChildren'), pick(openReorderChildren)) : null,
       hasSpousesToOrder ? item('move', t('dlg.opt.reorderSpouses'), pick(openReorderSpouses)) : null,
+      hasMarriage ? item('heart', t('dlg.opt.marriage'), pick(openMarriageDetails), { hint: t('dlg.opt.marriageHint') }) : null,
       item('users', t('dlg.opt.changeParents'), pick(openChangeParents)),
       item('link', t('dlg.opt.link'), pick(openLinkExisting)),
       item('merge', t('dlg.opt.merge'), pick(openMerge))),
