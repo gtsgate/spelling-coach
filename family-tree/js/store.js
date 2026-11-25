@@ -61,6 +61,8 @@ export const store = {
   draftErrors: [],
   draftWarnings: [],
   changelog: null,
+  /** applied.json ledger: proposalId → {idMap} for proposals already approved (resolves refs of dependants) */
+  appliedById: {},
   me: null,
   ready: false,
 
@@ -85,8 +87,8 @@ export const store = {
     const savedMe = loadJSON(ME_KEY);
     this.me = savedMe ? (this.base.resolve ? this.base.resolve(savedMe)?.id || savedMe : savedMe) : null;
 
-    // Drop sent proposals the changelog says were applied.
-    await this.loadChangelog().catch(() => null);
+    // Drop sent proposals the changelog says were applied; learn their real ids.
+    await Promise.all([this.loadChangelog().catch(() => null), this.loadApplied().catch(() => null)]);
     this.reconcileSent();
     this.recompute();
     this.ready = true;
@@ -98,7 +100,7 @@ export const store = {
     this.base = buildGraph(this.data);
     if (!silent) {
       this.changelog = null;
-      this.loadChangelog().then(() => { this.reconcileSent(); this.recompute(); this.emit('data'); }).catch(() => { this.recompute(); this.emit('data'); });
+      Promise.all([this.loadChangelog(), this.loadApplied()]).then(() => { this.reconcileSent(); this.recompute(); this.emit('data'); }).catch(() => { this.recompute(); this.emit('data'); });
     }
   },
 
@@ -113,6 +115,29 @@ export const store = {
     try { this.changelog = await fetchJSON('data/changelog.json'); } catch { this.changelog = { entries: [] }; }
     if (!this.changelog || !Array.isArray(this.changelog.entries)) this.changelog = { entries: [] };
     return this.changelog;
+  },
+
+  async loadApplied() {
+    let ledger = {};
+    try { ledger = await fetchJSON('data/applied.json'); } catch { ledger = {}; }
+    const byId = {};
+    for (const entry of Object.values(ledger || {})) {
+      if (entry && entry.proposalId) byId[entry.proposalId] = { idMap: entry.idMap || {}, issue: entry.issue ?? null };
+    }
+    this.appliedById = byId;
+    return byId;
+  },
+
+  /** refMap seeded with real ids of temp refs declared by already-applied proposals this one depends on. */
+  appliedRefMap(dependsOn = []) {
+    const map = {};
+    for (const id of dependsOn || []) Object.assign(map, this.appliedById[id]?.idMap || {});
+    return map;
+  },
+
+  /** Ids of dependsOn proposals that are already applied. */
+  appliedDeps(dependsOn = []) {
+    return (dependsOn || []).filter((id) => this.appliedById[id]);
   },
 
   reconcileSent() {
@@ -149,7 +174,8 @@ export const store = {
     const created = new Set();
     this.sentStale = new Set();
     for (const s of this.sent) {
-      const r = applyProposal(data, s.proposal, { ...PREVIEW(), refMap: { ...refMap } });
+      const deps = s.proposal.dependsOn || [];
+      const r = applyProposal(data, s.proposal, { ...PREVIEW(), refMap: { ...this.appliedRefMap(deps), ...refMap }, appliedDeps: this.appliedDeps(deps) });
       if (!r.ok) { this.sentStale.add(s.id); continue; }
       data = r.data;
       for (const ref of Object.keys(r.idMap || {})) refMap[ref] = r.idMap[ref];
@@ -160,7 +186,8 @@ export const store = {
     }
     let draftResult = null;
     if (draftProposal && draftProposal.ops.length) {
-      draftResult = applyProposal(data, draftProposal, { ...PREVIEW(), refMap: { ...refMap } });
+      const deps = draftProposal.dependsOn || [];
+      draftResult = applyProposal(data, draftProposal, { ...PREVIEW(), refMap: { ...this.appliedRefMap(deps), ...refMap }, appliedDeps: this.appliedDeps(deps) });
     }
     return { data, refMap, sentTouched, created, draftResult };
   },

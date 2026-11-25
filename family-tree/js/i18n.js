@@ -99,6 +99,11 @@ export function t(key, vars) {
   });
 }
 
+/** Snapshot of every registered string (used by the i18n completeness / gender-neutral checks). */
+export function dictionaries() {
+  return { ar: { ...dicts.ar }, en: { ...dicts.en } };
+}
+
 /** Does a key exist (in either language)? */
 export function has(key) { return key in dicts.ar || key in dicts.en; }
 

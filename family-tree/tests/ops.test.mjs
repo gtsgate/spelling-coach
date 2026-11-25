@@ -1077,6 +1077,12 @@ test('dependsOn: refMap in final mode, DEPENDS_ON_PENDING, applyProposals overla
     { op: 'edit-person', id: 'new1', set: { 'surname.ar': 'الأنصاري' } },
   ], { id: 'bbbbbbbbbb', dependsOn: ['aaaaaaaaaa'] });
   assert.equal(vp(B).ok, true, 'deferred to apply');
+  // The site always sets unionRef (§3.2), also on an op that USES a union of a dependsOn proposal: carrying the
+  // same ref re-binds it and does not declare it, so it is not "used before declared" (same rule as opRefs).
+  const B2 = { ...B, ops: [{ ...B.ops[0], unionRef: 'newu2' }, B.ops[1]] };
+  assert.equal(vp(B2).ok, true, 'unionRef equal to the used union ref is not a declaration');
+  assert.deepEqual(vp({ ...B2, dependsOn: [] }).errors.map((e) => [e.op, e.code, e.params.ref]),
+    [[0, 'UNKNOWN_REF', 'newu2'], [1, 'UNKNOWN_REF', 'new1']]);
   // final: A applied first, B resolves A's refs through refMap (applied.json idMap)
   const ra = record(applyProposal(data, A, { mode: 'final', now: NOW, issue: 1 }));
   assertOk(ra);
@@ -1084,6 +1090,12 @@ test('dependsOn: refMap in final mode, DEPENDS_ON_PENDING, applyProposals overla
   assertOk(rb);
   assert.deepEqual(rb.data.unions[ra.idMap.newu2].children, [rb.idMap.new3]);
   assert.equal(rb.data.people[ra.idMap.new1].surname.ar, 'الأنصاري');
+  const rb2 = record(applyProposal(ra.data, B2, { mode: 'final', now: NOW, issue: 2, refMap: ra.idMap }));
+  assertOk(rb2);
+  assert.deepEqual(rb2.data.unions[ra.idMap.newu2].children, [rb2.idMap.new3]);
+  const pv2 = applyProposals(data, [A, B2], { mode: 'preview', now: NOW });
+  assert.equal(pv2.ok, true, JSON.stringify(pv2.errors));
+  assert.deepEqual(pv2.data.unions.newu2.children, ['new3']);
   // A not applied yet
   const pending = record(applyProposal(data, B, { mode: 'final', now: NOW }));
   assert.deepEqual(assertError(pending, 'DEPENDS_ON_PENDING', 0).params, { proposalId: 'aaaaaaaaaa', pending: ['aaaaaaaaaa'], ref: 'newu2', field: 'link.union' });

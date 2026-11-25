@@ -350,6 +350,9 @@ const KIND_LABELS = {
 //   h.S()          the record an issue is about: person (params.id) or marriage (params.union) or path, "" if none
 //   h.lead()       h.S() + ": " when there is a subject, else ""
 
+/** DUPLICATE_REF / UNKNOWN_REF about a union ref ("newuN" or the unionRef field) rather than a new person. */
+const isUnionRefIssue = (h) => h.p.field === 'unionRef' || (typeof h.p.ref === 'string' && /^newu\d+$/.test(h.p.ref));
+
 const T = {
   // ---------------------------------------------------------------- data file: errors (schema.js)
   BAD_SCHEMA: {
@@ -528,13 +531,23 @@ const T = {
   },
 
   // ---------------------------------------------------------------- proposals: references (§3.2)
+  // Both codes also concern union refs (newuN): a unionRef bound to two different unions, or a union ref used
+  // before any op created or found that union.
   DUPLICATE_REF: {
-    en: (h) => `The new person${h.has('ref') ? ` “${h.V('ref')}”` : ''} is declared twice in this proposal.`,
-    ar: (h) => `الفرد الجديد${h.has('ref') ? ` «${h.V('ref')}»` : ''} مُعرَّف مرتين في هذا المقترح.`,
+    en: (h) => (isUnionRefIssue(h)
+      ? `The family reference${h.has('ref') ? ` “${h.V('ref')}”` : ''} is linked to two different families in this proposal.`
+      : `The new person${h.has('ref') ? ` “${h.V('ref')}”` : ''} is declared twice in this proposal.`),
+    ar: (h) => (isUnionRefIssue(h)
+      ? `مرجع الأسرة${h.has('ref') ? ` «${h.V('ref')}»` : ''} مرتبط بأسرتين مختلفتين في هذا المقترح.`
+      : `الفرد الجديد${h.has('ref') ? ` «${h.V('ref')}»` : ''} مُعرَّف مرتين في هذا المقترح.`),
   },
   UNKNOWN_REF: {
-    en: (h) => `${h.has('ref') ? `“${h.V('ref')}”` : 'A reference'} points to a new person who is not added earlier in this proposal.`,
-    ar: (h) => `${h.has('ref') ? `«${h.V('ref')}»` : 'أحد المراجع'} يشير إلى فرد جديد لم تسبق إضافته في هذا المقترح.`,
+    en: (h) => (isUnionRefIssue(h)
+      ? `${h.has('ref') ? `“${h.V('ref')}”` : 'A reference'} points to a new family (a couple or their children) that is not added earlier in this proposal.`
+      : `${h.has('ref') ? `“${h.V('ref')}”` : 'A reference'} points to a new person who is not added earlier in this proposal.`),
+    ar: (h) => (isUnionRefIssue(h)
+      ? `${h.has('ref') ? `«${h.V('ref')}»` : 'أحد المراجع'} يشير إلى أسرة جديدة (زوجين أو أبنائهما) لم تسبق إضافتها في هذا المقترح.`
+      : `${h.has('ref') ? `«${h.V('ref')}»` : 'أحد المراجع'} يشير إلى فرد جديد لم تسبق إضافته في هذا المقترح.`),
   },
   DEPENDS_ON_PENDING: {
     en: (h) => `This proposal builds on an earlier proposal${h.has('issue') ? ` (#${h.V('issue')})` : h.has('proposalId') ? ` (${h.V('proposalId')})` : ''} that has not been approved yet — that one needs approval first.`,

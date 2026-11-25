@@ -74,18 +74,27 @@ export function base64urlDecode(text) {
 // ---------------------------------------------------------------------------------------------------------
 // Streams
 
-/** Does this engine support deflate-raw streams? (Some older browsers have the classes but not this format.) */
-let rawDeflate = null;
+/**
+ * Does this engine support deflate-raw streams? (Some older browsers have the classes but not this format.)
+ * Checked at call time, not module load: the answer is memoized per pair of stream constructors, so an
+ * environment where CompressionStream is missing (or was removed) gets the GFT0 fallback (§4).
+ */
+let probed = { cs: undefined, ds: undefined, ok: false };
 function hasCompression() {
-  if (rawDeflate !== null) return rawDeflate;
+  const cs = globalThis.CompressionStream;
+  const ds = globalThis.DecompressionStream;
+  if (typeof cs !== 'function' || typeof ds !== 'function') return false;
+  if (probed.cs === cs && probed.ds === ds) return probed.ok;
+  let ok;
   try {
-    new globalThis.CompressionStream('deflate-raw');
-    new globalThis.DecompressionStream('deflate-raw');
-    rawDeflate = true;
+    new cs('deflate-raw');
+    new ds('deflate-raw');
+    ok = true;
   } catch {
-    rawDeflate = false;
+    ok = false;
   }
-  return rawDeflate;
+  probed = { cs, ds, ok };
+  return ok;
 }
 
 /** Read a stream into one Uint8Array, aborting (TOO_LARGE) past `max` bytes. */
@@ -122,11 +131,11 @@ async function transform(stream, bytes, max) {
 }
 
 async function deflateRaw(bytes) {
-  return transform(new CompressionStream('deflate-raw'), bytes, Number.MAX_SAFE_INTEGER);
+  return transform(new globalThis.CompressionStream('deflate-raw'), bytes, Number.MAX_SAFE_INTEGER);
 }
 
 async function inflateRaw(bytes, max) {
-  return transform(new DecompressionStream('deflate-raw'), bytes, max);
+  return transform(new globalThis.DecompressionStream('deflate-raw'), bytes, max);
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -146,11 +155,15 @@ export async function encodeProposal(proposal, { compress = true } = {}) {
 // ---------------------------------------------------------------------------------------------------------
 // Decode
 
-/** Remove invisible marks; drop quoted lines ("> …") when asked. */
+/** Drop quoted lines ("> …") when asked (invisible marks before the ">" do not hide the quote). */
+function dropQuoted(text, ignoreQuoted) {
+  if (!ignoreQuoted) return text;
+  return text.split(/\r?\n/).filter((line) => !/^\s*>/.test(line.replace(INVISIBLE_RE, ''))).join('\n');
+}
+
+/** Remove invisible marks; drop quoted lines when asked. */
 function cleanText(text, ignoreQuoted) {
-  let t = text.replace(INVISIBLE_RE, '');
-  if (ignoreQuoted) t = t.split(/\r?\n/).filter((line) => !/^\s*>/.test(line)).join('\n');
-  return t;
+  return dropQuoted(text, ignoreQuoted).replace(INVISIBLE_RE, '');
 }
 
 /** Codes in text, in order. Whitespace / backticks between code characters are removed first (wrapped codes). */
@@ -213,8 +226,24 @@ async function decodeCode(code) {
   return { proposal: obj, code: `GFT${version}:${payload}.${expected}` };
 }
 
-/** Proposal JSON in text: ```json fences, the whole text, or the outermost {...} span. null when none. */
-function findJson(text) {
+/** JSON.parse that returns undefined instead of throwing. */
+function tryParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+const isProposalObject = (obj) => !!obj && typeof obj === 'object' && !Array.isArray(obj) && obj.kind === 'gft-proposal';
+
+/**
+ * Proposal JSON in text: ```json fences, the whole text, or the outermost {...} span. → {proposal, broken}.
+ * Each candidate is parsed AS-IS first, so characters inside strings (e.g. U+200F in a note) are kept exactly as in
+ * the GFT code path — the same proposal never gets two contents or two hashes. Only when that fails is it retried
+ * without invisible marks (a messenger may insert them between tokens, where they break JSON.parse).
+ */
+function scanJson(text) {
   const candidates = [];
   for (const m of text.matchAll(/```[ \t]*(?:json)?[ \t]*\r?\n?([\s\S]*?)```/gi)) candidates.push(m[1].trim());
   const whole = text.trim();
@@ -226,16 +255,25 @@ function findJson(text) {
   for (const c of candidates) {
     if (!c.startsWith('{')) continue;
     if (new TextEncoder().encode(c).length > LIMITS.decodedBytes) throw codecError('TOO_LARGE', 'proposal JSON exceeds 1 MB');
-    let obj;
-    try {
-      obj = JSON.parse(c);
-    } catch {
+    let obj = tryParse(c);
+    if (obj === undefined) obj = tryParse(c.replace(INVISIBLE_RE, ''));
+    if (obj === undefined) {
       if (c.includes('gft-proposal')) broken = true;
       continue;
     }
-    if (obj && typeof obj === 'object' && !Array.isArray(obj) && obj.kind === 'gft-proposal') return obj;
+    if (isProposalObject(obj)) return { proposal: obj, broken };
   }
-  if (broken) throw codecError('BAD_JSON', 'the proposal JSON is not valid');
+  return { proposal: null, broken };
+}
+
+/** Proposal JSON in (quote-filtered) text, or null; BAD_JSON when a proposal-looking JSON does not parse. */
+function findJson(text) {
+  const raw = scanJson(text);
+  if (raw.proposal) return raw.proposal;
+  // Invisible marks around the fences or braces can hide a candidate entirely: scan the cleaned text too.
+  const cleaned = scanJson(text.replace(INVISIBLE_RE, ''));
+  if (cleaned.proposal) return cleaned.proposal;
+  if (raw.broken || cleaned.broken) throw codecError('BAD_JSON', 'the proposal JSON is not valid');
   return null;
 }
 
@@ -258,7 +296,7 @@ async function locate(text, { ignoreQuoted = false } = {}) {
     }
   }
   if (firstError) throw firstError;
-  const proposal = findJson(cleanText(text, ignoreQuoted));
+  const proposal = findJson(dropQuoted(text, ignoreQuoted));
   if (proposal) return { proposal, code: null };
   throw codecError('NO_PROPOSAL', 'no proposal found');
 }

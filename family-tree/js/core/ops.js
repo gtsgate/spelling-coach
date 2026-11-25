@@ -421,7 +421,11 @@ export function validateProposal(p, { refMap = null } = {}) {
       if (declaredAt.has(op.ref) || (refMap && hasOwn(refMap, op.ref))) E('DUPLICATE_REF', { ref: op.ref, field: 'ref' }, i, `ops.${i}.ref`);
       else declaredAt.set(op.ref, i);
     }
-    if (isTempUnionRef(op.unionRef) && !boundAt.has(op.unionRef)) boundAt.set(op.unionRef, i);
+    // An op that also USES its own unionRef (e.g. {as:"child", union:"newu2"}, unionRef:"newu2") only re-binds a
+    // union declared earlier or by a dependsOn proposal; it does not declare it (same rule as opRefs).
+    if (isTempUnionRef(op.unionRef) && !boundAt.has(op.unionRef) && opRefs(op).declares.includes(op.unionRef)) {
+      boundAt.set(op.unionRef, i);
+    }
   });
   const external = (ref) => (refMap && hasOwn(refMap, ref)) || dependsOn.length > 0;
   p.ops.forEach((op, i) => {
