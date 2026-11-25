@@ -26,8 +26,8 @@
 2. خلال دقيقة تقريباً يكتب الروبوت **تعليق مراجعة** واحداً في المقترح (ويحدّثه عند كل تعديل):
    - ✅ جاهز، أو ⚠️ جاهز ويتضمن حذفاً، أو ❌ فيه ما يمنع تطبيقه.
    - قائمة مرقّمة بالتعديلات بالعربية والإنجليزية، والتنبيهات، ورابط **معاينة** على الموقع.
-   - الأوامر الجاهزة للنسخ، مثل `/approve a1b2c3`.
-3. **للموافقة:** يكفي نسخ الأمر من تعليق الروبوت وإرساله تعليقاً (أو كتابة `/موافق a1b2c3`). الأحرف الستة بعد الأمر هي **بصمة** المقترح، وتضمن أن الموافقة على النسخة التي ظهرت في المراجعة تماماً.
+   - الأوامر الجاهزة للنسخ، مثل `/approve a1b2c3d4e5f60718`.
+3. **للموافقة:** يكفي نسخ الأمر من تعليق الروبوت وإرساله تعليقاً (أو كتابة `/موافق a1b2c3d4e5f60718`). الأحرف الستة عشر بعد الأمر هي **بصمة** المقترح، وتضمن أن الموافقة على النسخة التي ظهرت في المراجعة تماماً.
    - بديل سريع: إضافة التصنيف `approve`. يُقبل هذا فقط إذا لم يُعدَّل المقترح بعد مراجعته الأولى، وإلا يطلب الروبوت الأمر مع البصمة.
 4. بعد دقيقة أو اثنتين يكتب الروبوت «✅ طُبّقت التعديلات»، مع روابط الأشخاص في الموقع ورابط **«إبلاغ صاحب المقترح عبر واتساب»**، ثم يُغلق المقترح. قد يستغرق ظهور التغيير على الموقع بضع دقائق؛ والروابط فيها `?rev=` فتنتظر الصفحة حتى يُنشر التحديث.
 
@@ -37,10 +37,10 @@
 
 | الأمر | البديل العربي | العمل |
 |---|---|---|
-| `/approve a1b2c3` | `/موافق a1b2c3` | الموافقة على المقترح |
-| `/approve a1b2c3 skip 3,5` | `/موافق a1b2c3 تخطي 3،5` | الموافقة مع تخطي التعديلين 3 و5 (بأرقامهما في تعليق المراجعة) وما يعتمد عليهما |
-| `/approve a1b2c3 force` | `/موافق a1b2c3 فرض` | التطبيق رغم أن بيانات الشخص تغيّرت منذ إعداد المقترح |
-| `/approve-deletion a1b2c3` | `/موافق-حذف a1b2c3` | موافقة تشمل الحذف أو الدمج أو تغيير الوالدين (موافقة منفصلة عمداً) |
+| `/approve a1b2c3d4e5f60718` | `/موافق a1b2c3d4e5f60718` | الموافقة على المقترح |
+| `/approve a1b2c3d4e5f60718 skip 3,5` | `/موافق a1b2c3d4e5f60718 تخطي 3،5` | الموافقة مع تخطي التعديلين 3 و5 (بأرقامهما في تعليق المراجعة) وما يعتمد عليهما |
+| `/approve a1b2c3d4e5f60718 force` | `/موافق a1b2c3d4e5f60718 فرض` | التطبيق رغم أن بيانات الشخص تغيّرت منذ إعداد المقترح |
+| `/approve-deletion a1b2c3d4e5f60718` | `/موافق-حذف a1b2c3d4e5f60718` | موافقة تشمل الحذف أو الدمج أو تغيير الوالدين (موافقة منفصلة عمداً) |
 | `/correct` + رمز جديد | `/تصحيح` | استبدال المقترح بنسخة مصحّحة ومراجعتها فقط، دون موافقة |
 | `/reject` | `/رفض` | اعتذار لطيف ثابت النص (لا يذكر أي سبب) وإغلاق المقترح |
 | `/undo` | `/تراجع` | التراجع عن مقترح طُبّق (على المقترح المغلق نفسه) |
@@ -116,8 +116,8 @@ The automation and the issue form only work once the work is merged into the def
 2. Within about a minute the bot writes **one check comment** on the issue (updated whenever the issue changes):
    - ✅ ready, ⚠️ ready but includes removals, or ❌ something prevents applying it;
    - the numbered changes in Arabic and English, warnings, and a **preview** link to the site;
-   - ready-to-copy commands such as `/approve a1b2c3`.
-3. **To approve**, copy the command from the bot comment and post it as a comment (or type `/موافق a1b2c3`). The six characters are the proposal's **fingerprint**: they guarantee that exactly the version shown in the check is approved.
+   - ready-to-copy commands such as `/approve a1b2c3d4e5f60718`.
+3. **To approve**, copy the command from the bot comment and post it as a comment (or type `/موافق a1b2c3d4e5f60718`). The 16 characters are the proposal's **fingerprint**: they guarantee that exactly the version shown in the check is approved.
    - Shortcut: add the `approve` label. This is accepted only if the proposal was not edited after its first check; otherwise the bot asks for the command with the fingerprint.
 4. A minute or two later the bot posts “✅ Applied”, with links to the people on the site and a **“Tell them on WhatsApp”** link, and closes the issue. The site may take a few minutes to update; the links carry `?rev=` so the page waits for the new version.
 
@@ -127,10 +127,10 @@ Commands go on the **first line** of a comment, and the comment must start with 
 
 | Command | Arabic alias | Effect |
 |---|---|---|
-| `/approve a1b2c3` | `/موافق a1b2c3` | Approve |
-| `/approve a1b2c3 skip 3,5` | `/موافق a1b2c3 تخطي 3،5` | Approve but skip changes 3 and 5 (numbers from the check comment) and anything depending on them |
-| `/approve a1b2c3 force` | `/موافق a1b2c3 فرض` | Apply even though the person's data changed since the proposal was prepared |
-| `/approve-deletion a1b2c3` | `/موافق-حذف a1b2c3` | Approval that includes removals, merges or changing parents (deliberately separate) |
+| `/approve a1b2c3d4e5f60718` | `/موافق a1b2c3d4e5f60718` | Approve |
+| `/approve a1b2c3d4e5f60718 skip 3,5` | `/موافق a1b2c3d4e5f60718 تخطي 3،5` | Approve but skip changes 3 and 5 (numbers from the check comment) and anything depending on them |
+| `/approve a1b2c3d4e5f60718 force` | `/موافق a1b2c3d4e5f60718 فرض` | Apply even though the person's data changed since the proposal was prepared |
+| `/approve-deletion a1b2c3d4e5f60718` | `/موافق-حذف a1b2c3d4e5f60718` | Approval that includes removals, merges or changing parents (deliberately separate) |
 | `/correct` + new code | `/تصحيح` | Replace the proposal with a corrected one and check it, without approving |
 | `/reject` | `/رفض` | A fixed, polite thank-you/decline (never states a reason) and close |
 | `/undo` | `/تراجع` | Undo an applied proposal (on that closed issue) |

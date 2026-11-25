@@ -368,8 +368,15 @@ deletion-request, duplicate, undone`.
 * permissions `contents: read, issues: write`; checkout `persist-credentials: false`; Node 22; actions pinned.
 * Re-fetch the issue via REST (never trust event payload state). Skip closed / `applied` issues and issues without a proposal
   (no comment, no labels). Ensure labels exist. Add `family-tree` (+ `deletion-request` when destructive).
-* proposalHash; fingerprint `fp` = first 16 hex chars (`fingerprintOf` in ops.js). If the hash is in `applied.json` or equals another open issue → say
+* proposalHash; fingerprint `fp` = first 16 hex chars (`fingerprintOf` in ops.js; 64 bits — a 6-char/24-bit fp could be ground in
+  seconds). If the hash is in `applied.json` or equals another open issue → say
   "identical to #N". Dry-run `applyProposal(mode:"final", allowDestructive:true)` with `refMap` from applied.json for `dependsOn`.
+  Refs of `dependsOn` proposals already applied are shown as the real people they resolve to (describe runs on the proposal with those
+  refs replaced by their ids). A proposal whose `id` is already used in `applied.json` (not undone) under a DIFFERENT hash is refused
+  (❌ "this proposal's id was already used by a different proposal, applied in #N", bilingual): ids are public, and the first applied
+  entry of an id is the one `dependsOn` resolves to.
+* Outsider-controlled text is parsed in linear time: bodies are cut at 65,536 chars (GitHub's limit), issue-form fields are read line
+  by line (sections start at lines beginning with `### `).
 * ONE bot comment (found by marker `<!-- gft-bot:check … -->` AND author `github-actions[bot]`), updated in place, containing: status
   ✅/❌, bilingual errors & warnings, submitter, numbered change lines (1-based op index) in English and Arabic, preview link
   `<siteUrl>#/preview?code=<code>` (fallback `#/preview/<n>` when code > 30,000 chars), and owner instructions with the exact commands
@@ -382,28 +389,47 @@ deletion-request, duplicate, undone`.
 ### 6.3 Apply (`family-tree-apply.yml`)
 Triggers: `issues: [labeled, opened]`, `issue_comment: [created]`, `schedule: "23 */6 * * *"`, `workflow_dispatch {issue?, dry_run?}`.
 Job-level `if:` only passes for: labeled with `approve`/`approve-deletion`; opened with one of those labels; comments on issues (not PRs:
-`github.event.issue.pull_request == null`) whose body starts with `/`; schedule; dispatch. `concurrency: {group: family-tree-data,
+`github.event.issue.pull_request == null`) whose body contains `/` anywhere (`contains`, not `startsWith`: a quote-reply puts `> …` before
+the command; the script reads the first non-quoted line and decides); schedule; dispatch. `concurrency: {group: family-tree-data,
 cancel-in-progress: false}` is on the **job**. permissions `contents: write, issues: write, pages: write`.
-* **Commands** (first non-empty line, case-insensitive, trailing punctuation stripped; quoted lines ignored):
-  `/approve [fp] [skip 3,5] [force]`, `/approve-deletion [fp] …`, `/reject`, `/undo`; Arabic aliases `/موافق`, `/موافق-حذف`, `/رفض`, `/تراجع`.
+* **Commands** (first non-empty line, case-insensitive, trailing punctuation stripped; quoted lines ignored; the line is cut at 200 chars
+  and bodies at 65,536 before any parsing, which is linear): `/approve [fp] [skip 3,5] [force]`, `/approve-deletion [fp] …`, `/reject`,
+  `/undo`; Arabic aliases `/موافق`, `/موافق-حذف`, `/رفض`, `/تراجع`. A hex word of 6–64 chars is read as the fp; one shorter than 16 is
+  refused as too short (reply with the 16-char command).
   Comment author must be in `config.approvers` (case-insensitive; `author_association` is not trusted) — else a polite reply.
-  An approve comment adds the matching label via API (recording fp/skip/force in a hidden bot note), then the queue runs.
+  An approve comment adds the matching label via API (recording fp/skip/force AND the FULL hash of the version checked at that moment in
+  a hidden bot note `<!-- gft-bot:approval … hash=<64 hex> -->`), then the queue runs.
   A comment may contain a corrected proposal code (owner correction): it replaces the issue's proposal; it is dry-run and the result posted.
+* **Replies & the sweep**: every bot reply to a command carries `for=<comment id>` in its marker (queue results carry `for=-`). A command
+  counts as answered only when a bot comment names its id (legacy replies without any `for` answer every command before them). Every run
+  first answers, per issue, the NEWEST approver command if it is unanswered (a newer run cancelled its run, or it failed): approve /
+  approve-deletion / correct / reject on open proposals, and `/undo` on closed `applied` proposals updated in the last 3 days. Only
+  approvers' comments are parsed (authorization first), so outsiders can neither hide a command nor slow the sweep down.
 * **Queue**: every run lists open issues labelled `family-tree` + (`approve` | `approve-deletion`) without `applied`, oldest first, and for
   each re-fetches the issue and verifies via the issue events API that the actor of the most recent approve label was an approver (or the
   bot acting on an approver's comment). A cancelled/failed run therefore loses nothing; the schedule picks up stragglers.
 * **Integrity**: recompute the hash from the current body (or correction). A label/bare `/approve` is accepted only if the body was never
   edited after the first check (`edits==0`) or the issue author is the approver; otherwise `/approve <fp>` with the current fp is required
-  (reply with the exact command, remove label). If the hash is in `applied.json` → comment "already applied in #N", labels
-  `applied`,`duplicate`, close.
+  (reply with the exact command, remove label). A typed fp must be ≥ 16 hex chars and a prefix of the current hash. An approval given by
+  comment is bound to the full hash in its bot note: if the current hash differs (whatever the fp says), reply asking to approve the
+  current version (with its fp) and remove the label. If the hash is in `applied.json` → comment "already applied in #N", labels
+  `applied` + `duplicate` (only `applied` when N is the issue itself), close.
 * Destructive (incl. REPARENT) without `approve-deletion` → comment with the exact `/approve-deletion <fp>`; remove `approve`; skip.
 * Apply all queued proposals in order into ONE commit: `applyProposal(mode:"final", allowDestructive, force, refMap, issue, actor, now)`.
   Failure → bilingual errors comment, label `needs-changes`, remove approve label (others in the batch still apply).
-  `DEPENDS_ON_PENDING` → "approve #N first".
+  `DEPENDS_ON_PENDING` → "approve #N first". Building the batch (also after every fetch + reset of the push loop) re-reads `applied.json`
+  and skips every item whose hash is already there (e.g. our own push that landed although it was reported as failed → reported as
+  applied with that commit) or that an earlier item of the same batch applies (→ "already applied in #N", `applied` + `duplicate`,
+  close; "retry" instead if that batch was not pushed). An item whose proposal id an applied (or earlier-in-batch) proposal uses under
+  another hash is refused (as in §6.2).
 * Write `family.json` (serializeData), prepend changelog entries, add `applied.json` entries `{hash: {issue, proposalId, commit,
-  idMap, at}}`; commit message built in Node (≤72-char English title) via `git commit -F`; checkout `ref: main`, push loop ≤5 attempts
-  with backoff; on non-fast-forward: `git fetch && git reset --hard origin/main`, reload, re-apply the batch, commit, push. Never
-  rebase/merge JSON. After 5 failures: comment "will retry automatically", leave labels.
+  idMap, at}}`; commit message built in Node via `git commit -F` from issue numbers, counts and (validated) proposal ids ONLY — never
+  proposal text (a name "Closes #1" would close issue #1): title `family-tree: apply #12, #13` (≤72 chars), one line per issue
+  `#12 (rev 6): proposal <id>, 3 changes[, 1 skipped]`, trailers `Gft-Apply: #12 <hash> rev 6`; the bilingual descriptions stay in the
+  comments and the changelog. Checkout: the default branch BY NAME (its current tip; for schedule runs the name comes from
+  `GET /repos/{repo}`), never `github.sha`; push loop ≤5 attempts with backoff; on non-fast-forward: `git fetch && git reset --hard
+  origin/main`, reload, re-apply the batch, commit, push. Never rebase/merge JSON. After 5 failures: comment "will retry automatically",
+  leave labels.
 * Pages: poll `GET /pages/builds/latest` ≤90 s; `POST /pages/builds` only if it is not building the pushed SHA (continue-on-error).
 * Success comment: ✅ commit link; links `<siteUrl>#/p/<id>?rev=<N>` for created/changed people; warnings (bilingual); a "tell them on
   WhatsApp" link (`https://wa.me/?text=` bilingual "your update is now on the family tree … it may take a few minutes to appear");
@@ -414,11 +440,15 @@ cancel-in-progress: false}` is on the **job**. permissions `contents: write, iss
 ### 6.5 Undo: `/undo` (approver, on a closed `applied` issue). Using the changelog entry's `commit`: load family.json at `<commit>^` and
 `<commit>`; for each person/union that commit changed: if current == `<commit>` version → restore `<commit>^` version (delete if it did
 not exist); if any changed since → refuse, listing them. Commit `family-tree: undo #N`, changelog entry `{action:"undo", issue:N}`, label
-`undone`, revision +1. (Batch commits: restore only records listed for that issue in the changelog entry's `touched`.)
+`undone`, revision +1. (Batch commits: restore only records listed for that issue in the changelog entry's `touched`; a record that ANY
+other proposal of the same commit also touched — earlier or later in the batch — blocks the undo, since `<commit>^` predates the whole
+batch: refuse, listing those records and naming the other issues.) A push that fails 5 times → "will retry automatically": that reply
+does not name the `/undo`, so the sweep (§6.3) retries it.
 ### 6.6 Ledgers
 `changelog.json`: `{"entries":[{"issue","proposalId","hash","commit","rev","at","title","summary":{"en":[],"ar":[]},"submitter",
 "approvedBy","people":[ids],"touched":{"people":[],"unions":[]},"destructive","action":"apply"|"undo"}]}` newest first, max 500.
-`applied.json`: `{"<hash>": {"issue","proposalId","commit","idMap","at"}}`, never truncated.
+`applied.json`: `{"<hash>": {"issue","proposalId","commit","idMap","at"}}`, never truncated. Per `proposalId`, the FIRST applied
+(not undone) entry is the one `dependsOn` resolves to; a different proposal re-using that id is refused by check and apply.
 ### 6.7 Backup (`family-tree-backup.yml`): weekly (`41 2 * * 5`) + dispatch: release `data-YYYY-MM-DD` with family.json, changelog.json,
 applied.json attached; keep the latest 12 data releases.
 
