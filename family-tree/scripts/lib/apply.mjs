@@ -109,7 +109,7 @@ async function approveCommand(ctx, issue, comment, cmd) {
     correction = await correctionIn(comment.body);
   } catch (e) {
     const issueObj = { code: e.code || 'BAD_CODE', params: {} };
-    await gh.createComment(n, [simpleComment('correctionBroken', {}, 'bad-correction'),
+    await gh.createComment(n, [simpleComment('correctionBroken', {}, 'bad-correction').replace('\n\n', '\n\n❌ '),
       `${formatIssue(issueObj, 'ar')} · ${formatIssue(issueObj, 'en')}`].join('\n\n'));
     return { action: 'bad-correction', code: issueObj.code };
   }
@@ -119,10 +119,16 @@ async function approveCommand(ctx, issue, comment, cmd) {
     return { action: 'no-proposal' };
   }
   if (cmd.cmd === 'correct') {
-    await gh.createComment(n, simpleComment('correctionReceived', {}, 'corrected'));
+    await gh.createComment(n, `✏️ ${simpleComment('correctionReceived', {}, 'corrected')}`.replace(/^✏️ (<!--[^\n]*-->)/, '$1\n\n✏️'));
     return { action: 'corrected', hash: check.hash };
   }
   const label = labelForCommand(cmd.cmd);
+  if (label === LABELS.APPROVE && check.destructive && !cmd.skip.length) {
+    // Known now (incl. REPARENT from the dry run): ask for the separate deletion approval straight away.
+    await gh.createComment(n, needDeletionComment({ fp: check.fp }));
+    if (hasLabel(issue, LABELS.APPROVE)) await gh.removeLabel(n, LABELS.APPROVE);
+    return { action: 'needs-deletion-approval', hash: check.hash };
+  }
   await gh.createComment(n, approvalNote({ cmd: label, commentId: comment.id, by: comment.user?.login, correction: !!correction }));
   // Re-add the label so the newest "labeled" event is the bot's (it then points at this comment).
   if (hasLabel(issue, label)) await gh.removeLabel(n, label);
@@ -408,9 +414,8 @@ export async function processQueue(ctx, { only = null } = {}) {
         const rev = o.rev;
         const people = (o.people || []).map((id) => ({ ...namesOf(finalGraph, id), url: `${ctx.siteUrl}#/p/${id}?rev=${rev}` }));
         const target = people[0]?.url || `${ctx.siteUrl}#/changes?rev=${rev}`;
-        const sha = res.sha || '0000000';
         await gh.createComment(n, appliedComment({
-          commitUrl: res.sha ? commitUrl(ctx, sha) : null, commitShort: sha.slice(0, 7), rev, people, issue: n,
+          commitUrl: res.sha ? commitUrl(ctx, res.sha) : null, commitShort: res.sha ? res.sha.slice(0, 7) : 'dry-run', rev, people, issue: n,
           warnings: issueLines(o.result.warnings, { graph: finalGraph, refNames: o.refNames }),
           whatsappUrl: whatsappLink(target), skipped: o.item.skipShown,
         }));
@@ -505,8 +510,9 @@ export async function undoIssue(ctx, issue, actor) {
     ...plan.restored.people.filter((id) => gNow.person(id)).map((id) => ({ ...namesOf(gNow, id), url: `${ctx.siteUrl}#/p/${id}?rev=${plan.rev}` })),
     ...plan.deleted.people.map((id) => ({ ...namesOf(gAfter, id), url: null })),
   ];
-  const sha = res.sha || '0000000';
-  await gh.createComment(n, undoneComment({ issue: n, commitUrl: res.sha ? commitUrl(ctx, sha) : null, commitShort: sha.slice(0, 7), rev: plan.rev, people }));
+  await gh.createComment(n, undoneComment({
+    issue: n, commitUrl: res.sha ? commitUrl(ctx, res.sha) : null, commitShort: res.sha ? res.sha.slice(0, 7) : 'dry-run', rev: plan.rev, people,
+  }));
   await gh.addLabels(n, [LABELS.UNDONE]);
   await gh.removeLabel(n, LABELS.APPLIED);
   const summary = { action: 'undone', rev: plan.rev, sha: res.sha || null, restored: plan.restored, deleted: plan.deleted };

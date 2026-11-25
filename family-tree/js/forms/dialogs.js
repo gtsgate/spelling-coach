@@ -27,7 +27,7 @@ import { formatIssue } from '../core/messages.js';
 import { refNames } from '../core/describe.js';
 import { opRefs } from '../core/ops.js';
 import { REASON_CODES, LIMITS, isPersonId, isUnionId, isTempUnionRef } from '../core/schema.js';
-import { normalizeArabic, skeletonKey } from '../core/names.js';
+import { normalizeArabic, skeletonKey, personName } from '../core/names.js';
 import { englishOf } from '../core/translit.js';
 
 register({
@@ -74,6 +74,7 @@ register({
     'dlg.otherNameRequired': 'Please write the name, or choose “Not known”.',
     'dlg.chooseOne': 'Please choose one of the options.',
     'dlg.kind': 'This child is…',
+    'dlg.kindToggle': 'A child by kafala or nursing?',
     'dlg.kind.bio': 'Their own child',
     'dlg.kind.foster': 'Raised under kafala (foster child)',
     'dlg.kind.milk': 'A milk child (nursed — rada’a)',
@@ -288,6 +289,7 @@ register({
     'dlg.otherNameRequired': 'يُرجى كتابة الاسم، أو اختيار «غير معروف».',
     'dlg.chooseOne': 'يُرجى اختيار أحد الخيارات.',
     'dlg.kind': 'هذا الطفل…',
+    'dlg.kindToggle': 'طفل بالكفالة أو الرضاعة؟',
     'dlg.kind.bio': 'من الأبناء (نسباً)',
     'dlg.kind.foster': 'مكفول في رعايته (كفالة)',
     'dlg.kind.milk': 'من الرضاعة',
@@ -638,7 +640,7 @@ function targetCard(person, caption = '') {
 function radioCards({ legend = '', options, value = '', onChange = null, name = `rc${++dlgSeq}`, className = '' }) {
   const inputs = [];
   const errorEl = h('div', { class: 'field-error' });
-  const el = h('fieldset', { class: ['radio-group', 'dlg-choices', className] },
+  const el = h('fieldset', { class: ['dlg-choices', className] },
     legend ? h('legend', null, legend) : null,
     options.map((o) => {
       const input = h('input', { type: 'radio', name, value: o.value, checked: o.value === value, disabled: !!o.disabled });
@@ -744,7 +746,7 @@ function findMatches(input, { near = null, exclude = new Set(), nearOnly = false
 /** "Is it one of these?" panel. onLink(person) / onNew(). */
 function duplicatesPanel(matches, { onLink, onNew }) {
   return h('div', { class: 'dlg-dupes' },
-    h('div', { class: 'notice notice-info' }, icon('users'), h('div', null, h('p', { class: 'dlg-dupes-title' }, t('dlg.dupTitle')), h('p', { class: 'small' }, t('dlg.dupLead')))),
+    h('p', { class: 'dlg-lead' }, t('dlg.dupLead')),
     h('ul', { class: 'list dlg-dupes-list' }, matches.map((p) => {
       const parents = g().parents(p.id);
       const y = yearsOf(p);
@@ -873,7 +875,7 @@ export function openAddRelative(personId, as = 'child') {
         if (newInput) { newInput.disabled = tie; newInput.closest('label').classList.toggle('is-disabled', tie); if (tie && newInput.checked) { q.other.value = 'unknown'; newNameField.el.hidden = true; } }
       },
     });
-    q.kindWrap = h('details', { class: 'dlg-kind-wrap' }, h('summary', null, t('dlg.kind')), q.kind.el);
+    q.kindWrap = h('details', { class: 'dlg-kind-wrap' }, h('summary', null, t('dlg.kindToggle')), q.kind.el);
   }
 
   if (as === 'parent') {
@@ -942,11 +944,11 @@ export function openAddRelative(personId, as = 'child') {
   // --- steps ----------------------------------------------------------------------------------------------
   const formStep = h('div', { class: 'dlg-step' },
     q.other ? q.other.el : null,
-    q.kindWrap || null,
     q.scope ? q.scope.el : null,
     q.share ? q.share.el : null,
     q.siblingOtherWrap || null,
-    form ? h('div', { class: 'dlg-form-wrap' }, form.el) : null);
+    form ? h('div', { class: 'dlg-form-wrap' }, form.el) : null,
+    q.kindWrap || null);
 
   function showForm() {
     shell.setTitle(t(`dlg.add.${as}`));
@@ -1046,11 +1048,11 @@ export function openAddRelative(personId, as = 'child') {
     if (!dupesDismissed) {
       const graphNow = g();
       const exclude = new Set([personId]);
-      if (as === 'child') graphNow.children(personId).forEach((c) => exclude.add(c.id));
-      if (as === 'child') graphNow.ancestors(personId).forEach((_, id) => exclude.add(id));
+      // Ancestors and descendants can never be the new child / parent / sibling / spouse.
+      graphNow.ancestors(personId).forEach((_, id) => exclude.add(id));
+      graphNow.descendants(personId).forEach((_, id) => exclude.add(id));
       if (as === 'spouse') graphNow.spouses(personId).forEach((s) => exclude.add(s.person.id));
-      if (as === 'parent') { graphNow.parents(personId).forEach((x) => exclude.add(x.id)); graphNow.descendants(personId).forEach((_, id) => exclude.add(id)); }
-      if (as === 'sibling') { const s = graphNow.siblings(personId); [...s.full, ...s.unspecified, ...s.half.map((x) => x.person)].forEach((x) => exclude.add(x.id)); graphNow.ancestors(personId).forEach((_, id) => exclude.add(id)); }
+      if (as === 'sibling') { const s = graphNow.siblings(personId); [...s.full, ...s.unspecified, ...s.half.map((x) => x.person)].forEach((x) => exclude.add(x.id)); }
       const matches = findMatches(input, { near: personId, exclude, nearOnly: as !== 'spouse' });
       if (matches.length) { showDupes(matches, input); return false; }
     }
@@ -1306,12 +1308,14 @@ function sortableList(items, { label = (it) => it.id } = {}) {
   function startDrag(e, row, handle) {
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
-    try { handle.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    // Listen on the document: moving the row in the DOM would release a pointer capture on the handle.
     row.classList.add('is-dragging');
     list.classList.add('is-sorting');
     const startY = e.clientY;
     let lastY = startY;
     const onMove = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      ev.preventDefault();
       lastY = ev.clientY;
       const kids = [...list.children].filter((k) => k !== row);
       let before = null;
@@ -1323,18 +1327,19 @@ function sortableList(items, { label = (it) => it.id } = {}) {
       else if (list.lastChild !== row) list.appendChild(row);
       renumber();
     };
-    const onUp = () => {
-      handle.removeEventListener('pointermove', onMove);
-      handle.removeEventListener('pointerup', onUp);
-      handle.removeEventListener('pointercancel', onUp);
+    const onUp = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
       row.classList.remove('is-dragging');
       list.classList.remove('is-sorting');
       if (Math.abs(lastY - startY) > 4) announce(row);
       handle.focus({ preventScroll: true });
     };
-    handle.addEventListener('pointermove', onMove);
-    handle.addEventListener('pointerup', onUp);
-    handle.addEventListener('pointercancel', onUp);
+    document.addEventListener('pointermove', onMove, { passive: false });
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
   }
   items.forEach((it) => list.appendChild(makeRow(it)));
   renumber();
@@ -1751,6 +1756,7 @@ export function openRequestRemoval(personId) {
   const shell = openShell({ title: t('dlg.remove'), size: 'md', className: 'dlg-remove' });
   const issues = issuesBox();
   const name = nameOf(P);
+  const typeName = personName(P, lang()) || name;
   const closeOnly = [{ label: t('dlg.close'), variant: 'ghost', onClick: () => shell.close(false) }];
 
   if (isNewRecord(personId)) {
@@ -1815,8 +1821,8 @@ export function openRequestRemoval(personId) {
   // Type the name to confirm
   const typeId = `dlg-type-${++dlgSeq}`;
   const typed = h('input', { id: typeId, class: 'input', type: 'text', autocomplete: 'off', dir: 'auto', attrs: { spellcheck: 'false' } });
-  const typeField = field({ label: t('dlg.typeName', { name }), control: typed, id: typeId });
-  const targets = new Set([nameOf(P, 'ar'), nameOf(P, 'en'), P.name?.ar, P.name?.en].filter(Boolean).map(looseName).filter(Boolean));
+  const typeField = field({ label: t('dlg.typeName', { name: typeName }), control: typed, id: typeId });
+  const targets = new Set([nameOf(P, 'ar'), nameOf(P, 'en'), personName(P, 'ar'), personName(P, 'en'), P.name?.ar, P.name?.en].filter(Boolean).map(looseName).filter(Boolean));
   const matches = () => targets.has(looseName(typed.value));
   typed.addEventListener('input', () => { typeField.setError(''); if (submitBtn()) submitBtn().disabled = !matches(); });
   const submitBtn = () => shell.primary;

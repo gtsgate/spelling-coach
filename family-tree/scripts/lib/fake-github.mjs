@@ -13,7 +13,7 @@ export function createFakeGitHub(seed = {}) {
     comments: new Map(),
     events: new Map(),
     labels: new Set((seed.labels || []).map((l) => (typeof l === 'string' ? l : l.name))),
-    pages: seed.pages ?? { status: 'built', commit: '' },
+    pages: 'pages' in seed ? seed.pages : { status: 'built', commit: '' },
     pagesRequests: 0,
     releases: (seed.releases || []).map((r) => ({ assets: [], ...r })),
     tagsDeleted: [],
@@ -169,5 +169,5 @@ export function fakeFromEvent(event = {}) {
     if (!list.some((c) => c.id === event.comment.id)) list.push(event.comment);
     comments[n] = list;
   }
-  return createFakeGitHub({ issues, comments, events: fx.events || {}, labels: fx.labels || [], pages: fx.pages });
+  return createFakeGitHub({ issues, comments, events: fx.events || {}, labels: fx.labels || [], ...('pages' in fx ? { pages: fx.pages } : {}) });
 }

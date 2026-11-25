@@ -404,7 +404,7 @@ function addOpsFor(ops, rows, onOk) {
   const fresh = (res.warnings || []).filter((w) => Number.isInteger(w.op) && w.op >= base && ['POSSIBLE_DUPLICATE', 'NAME_LOOKS_FULL'].includes(w.code));
   if (fresh.length) {
     const wctx = { graph: store.working, refNames: refNames(store.draft.ops, store.working) };
-    toast(fresh.map((w) => formatIssue(w, lang(), wctx)).join(' · '), { type: 'warning', timeout: 9000 });
+    toast(fresh.map((w) => formatIssue(w, lang(), { ...wctx, withOp: false })).join(' · '), { type: 'warning', timeout: 9000 });
   }
   return true;
 }
@@ -608,13 +608,13 @@ function looksFull(s) {
 }
 
 /** Group of rows with an "+ another" button. */
-function rowGroup({ key, kind, ctx, fixedGender = '', addLabel, autoOne = true, onAnother = null }) {
+function rowGroup({ key, kind, ctx, fixedGender = '', addLabel, autoOne = true, onAnother = null, offset = 0 }) {
   const rows = rowsOf(key);
   if (autoOne && !rows.length) rows.push(newRow(kind, fixedGender ? { gender: fixedGender, fixedGender: true } : {}));
   const box = h('div', { class: 'wiz-rows', dataset: { group: key } });
   const draw = () => {
     box.replaceChildren(...rows.map((r, i) => rowEl(r, {
-      kind, index: i, fixedGender, ctx: ctx ? { ...ctx, group: key } : null,
+      kind, index: offset + i, fixedGender, ctx: ctx ? { ...ctx, group: key } : null,
       onRemove: () => {
         const j = rows.indexOf(r);
         if (j >= 0) rows.splice(j, 1);
@@ -709,7 +709,7 @@ function back() {
 }
 let lastScrollTop = false;
 
-function footer({ onNext, nextLabel = t('wiz.saveNext'), skip = true, showBack = true }) {
+function footer({ onNext, nextLabel = t('wiz.next'), skip = true, showBack = true }) {
   return h('div', { class: 'wiz-footer' },
     showBack ? h('button', { type: 'button', class: 'btn btn-ghost wiz-back', on: { click: back } }, icon('chevronStart', { size: 18, className: 'flip-rtl' }), t('common.back')) : h('span'),
     h('div', { class: 'wiz-footer-main' },
@@ -875,7 +875,7 @@ function spousesStep() {
   const makeOp = (r) => ({ op: 'add-person', ref: store.newRef(), person: personInput(r), link: { as: 'spouse', of: F }, unionRef: store.newUnionRef() });
   const commit = () => commitGroup(key, makeOp);
   const group = rowGroup({
-    key, kind: 'spouse', fixedGender: spouseGender, ctx: { kind: 'spouse', F },
+    key, kind: 'spouse', fixedGender: spouseGender, ctx: { kind: 'spouse', F }, offset: existing.length,
     addLabel: t(`wiz.spouses.another.${w}`), autoOne: !existing.length, onAnother: commit,
   });
   return h('div', { class: 'wiz-step wiz-step-spouses' },
@@ -926,7 +926,7 @@ function childrenStep() {
         }, icon('users', { size: 16 }), t(`wiz.children.addFamily.${gword(c)}`)),
       }))) : null,
       rowGroup({
-        key: gr.key, kind: 'child', ctx: { kind: 'child', F, S: gr.S },
+        key: gr.key, kind: 'child', ctx: { kind: 'child', F, S: gr.S }, offset: kids.length,
         addLabel: t('wiz.children.another'), autoOne, onAnother: () => commitGroup(gr.key, makeOpFor(gr.S)),
       }));
   });
@@ -938,7 +938,7 @@ function childrenStep() {
     ...cards,
     footer({
       onNext: () => { if (commitAll()) go(nextStep()); },
-      nextLabel: nested ? t('common.done') : t('wiz.saveNext'),
+      nextLabel: nested ? t('common.done') : t('wiz.next'),
     }));
 }
 
@@ -973,7 +973,7 @@ function parentsStep() {
     h('section', { class: 'card wiz-siblings' },
       h('h3', { class: 'wiz-sub' }, t('wiz.parents.siblings')),
       sibList.length ? h('ul', { class: 'wiz-people' }, sibList.map((p) => personLine(p))) : null,
-      rowGroup({ key: `sib:${F}`, kind: 'sibling', ctx: { kind: 'other' }, addLabel: t('wiz.parents.another'), autoOne: !sibList.length, onAnother: () => commitGroup(`sib:${F}`, sibOp) })),
+      rowGroup({ key: `sib:${F}`, kind: 'sibling', ctx: { kind: 'other' }, offset: sibList.length, addLabel: t('wiz.parents.another'), autoOne: !sibList.length, onAnother: () => commitGroup(`sib:${F}`, sibOp) })),
     footer({ onNext: () => { if (commitAll()) go(STEP.REVIEW); } }));
 }
 
@@ -1037,7 +1037,7 @@ function render(root, params, query = {}) {
   else if (W.step === STEP.PARENTS) body = parentsStep();
   else body = reviewStep();
 
-  root.append(
+  root.append(...[
     h('header', { class: 'page-head wiz-head' },
       h('div', { class: 'row row-between wiz-head-row' },
         h('h1', null, t('wiz.title')),
@@ -1046,7 +1046,8 @@ function render(root, params, query = {}) {
     stepper(),
     notice,
     h('div', { class: 'wiz-body' }, body),
-    h('div', { class: 'wiz-help' }, whatsappLink()));
+    h('div', { class: 'wiz-help' }, whatsappLink()),
+  ].filter(Boolean));
   if (lastScrollTop) {
     lastScrollTop = false;
     requestAnimationFrame(() => { try { window.scrollTo({ top: 0 }); } catch { /* ignore */ } });

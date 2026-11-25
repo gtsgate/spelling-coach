@@ -80,7 +80,7 @@ export function capBody(body, max = MAX_COMMENT, tail = '\n\n…') {
 
 /** A Markdown link with an escaped label and a URL that cannot break out of the parentheses. */
 export function link(label, url) {
-  const safeUrl = String(url ?? '').replace(/[\s()<>"]/g, (c) => encodeURIComponent(c));
+  const safeUrl = String(url ?? '').replace(/[\s()<>"]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`);
   return `[${label}](${safeUrl})`;
 }
 

@@ -464,7 +464,7 @@ export function personForm({ mode = 'add', person = null, context = {} } = {}) {
       nsHint),
   });
   // move the hint right under the inputs (before the name-status options)
-  if (nameField.hintEl) nameInputs.appendChild(nameField.hintEl);
+  if (nameField.hintEl) nameInputs.insertBefore(nameField.hintEl, fullNameBox);
 
   function applyNameStatus() {
     nsUnknown.checked = state.nameStatus === 'unknown';

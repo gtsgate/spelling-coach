@@ -71,9 +71,9 @@ export const TEXTS = {
     `The fingerprint given (${p.given}) doesn’t match the current version (${p.fp}) — it may have been edited after review. To approve the current version:`,
   ],
   alreadyApplied: (p) => [`ℹ️ سبق تطبيق هذه التعديلات نفسها في ${p.ref}، فلا حاجة إلى تطبيقها مرة أخرى.`, `ℹ️ These exact changes were already applied in ${p.ref}, so there is nothing more to do.`],
-  approvalReceived: ['👍 وصلت الموافقة، وجارٍ التطبيق…', '👍 Approval received — applying now…'],
-  correctionReceived: ['✏️ وصل المقترح المصحّح، وحُدّثت المراجعة أعلاه.', '✏️ Corrected proposal received — the check above is updated.'],
-  correctionBroken: ['❌ تعذّرت قراءة الرمز المصحّح', '❌ The corrected code could not be read'],
+  approvalReceived: ['وصلت الموافقة، وجارٍ التطبيق…', 'Approval received — applying now…'],
+  correctionReceived: ['وصل المقترح المصحّح، وحُدّثت المراجعة أعلاه.', 'Corrected proposal received — the check above is updated.'],
+  correctionBroken: ['تعذّرت قراءة الرمز المصحّح', 'The corrected code could not be read'],
   notApprover: (p) => [
     `شكراً لكم! الموافقة على التعديلات من صلاحيات ${p.owner} فقط، وسيُراجَع المقترح قريباً بإذن الله.`,
     `Thank you! Only ${p.ownerEn} can approve changes; the proposal will be reviewed soon.`,
@@ -152,29 +152,19 @@ function noteLine(proposal, formFields) {
  *    staleEdit, formFields}
  */
 export function checkComment(p) {
-  const parts = [];
-  parts.push(marker(MARKERS.CHECK, { hash: p.hash, rev: p.rev, edits: p.edits, src: p.src, fp: p.fp }));
+  const head = [];
+  head.push(marker(MARKERS.CHECK, { hash: p.hash, rev: p.rev, edits: p.edits, src: p.src, fp: p.fp }));
   const status = !p.ok ? 'failing' : p.destructive ? 'readyDestructive' : 'ready';
-  parts.push(`### ${{ failing: '❌', readyDestructive: '⚠️', ready: '✅' }[status]} ${bi(status)}`);
+  head.push(`### ${{ failing: '❌', readyDestructive: '⚠️', ready: '✅' }[status]} ${bi(status)}`);
   const meta = [submitterLine(p.proposal, p.formFields), noteLine(p.proposal, p.formFields)].filter(Boolean);
-  if (meta.length) parts.push(meta.join('  \n'));
-  if (p.appliedIn) parts.push(`ℹ️ ${bi('sameAsApplied', { ref: issueRef(p.appliedIn) })}`);
-  for (const n of p.identicalTo || []) parts.push(`ℹ️ ${bi('sameAsOpen', { ref: issueRef(n) })}`);
-  for (const n of p.dependsOnIssues || []) parts.push(`⏳ ${bi('dependsOn', { ref: issueRef(n) })}`);
+  if (meta.length) head.push(meta.join('  \n'));
+  if (p.appliedIn) head.push(`ℹ️ ${bi('sameAsApplied', { ref: issueRef(p.appliedIn) })}`);
+  for (const n of p.identicalTo || []) head.push(`ℹ️ ${bi('sameAsOpen', { ref: issueRef(n) })}`);
+  for (const n of p.dependsOnIssues || []) head.push(`⏳ ${bi('dependsOn', { ref: issueRef(n) })}`);
 
   const n = p.describe.en.length;
-  const [chAr, chEn] = tx('changes', { n });
-  parts.push(bilingualList(chAr, chEn, p.describe.ar, p.describe.en, { budget: 20000 }));
-  if (p.errors.en.length) {
-    const [a, e] = tx('problems');
-    parts.push(bilingualList(`❌ ${a}`, `❌ ${e}`, p.errors.ar, p.errors.en, { budget: 6000, number: false }));
-  }
-  if (p.warnings.en.length) {
-    const [a, e] = tx('warnings');
-    parts.push(bilingualList(`⚠️ ${a}`, `⚠️ ${e}`, p.warnings.ar, p.warnings.en, { budget: 5000, number: false }));
-  }
-  if (p.previewUrl) parts.push(`🔍 **${link(bi('preview'), p.previewUrl)}**`);
-
+  const tail = [];
+  if (p.previewUrl) tail.push(`🔍 **${link(bi('preview'), p.previewUrl)}**`);
   const cmds = [];
   const approveCmd = p.destructive ? 'approve-deletion' : 'approve';
   if (p.ok) {
@@ -188,9 +178,28 @@ export function checkComment(p) {
   cmds.push(`${bi('toReject')}:\n${codeBlock('/reject')}`);
   cmds.push(bi('toIgnore'));
   if (p.ok && !p.destructive) cmds.push(`<sub>${esc(bi('labelHint'))}</sub>`);
-  parts.push(`---\n#### ${bi('forKeeper')}\n\n${cmds.join('\n\n')}`);
-  parts.push(`<sub>${bi('footer', { fp: p.fp, rev: p.rev })}</sub>`);
-  return capBody(parts.join('\n\n'), MAX_COMMENT);
+  tail.push(`---\n#### ${bi('forKeeper')}\n\n${cmds.join('\n\n')}`);
+  tail.push(`<sub>${bi('footer', { fp: p.fp, rev: p.rev })}</sub>`);
+
+  // Share the remaining room between the lists (per language), so the commands at the end are never cut off.
+  const fixed = head.join('\n\n').length + tail.join('\n\n').length + 1000;
+  const room = Math.max(4000, MAX_COMMENT - fixed);
+  const weights = { changes: 3, errors: p.errors.en.length ? 1.5 : 0, warnings: p.warnings.en.length ? 1 : 0 };
+  const total = weights.changes + weights.errors + weights.warnings;
+  const budget = (k) => Math.floor((room * weights[k]) / total / 2) - 200;
+
+  const body = [];
+  const [chAr, chEn] = tx('changes', { n });
+  body.push(bilingualList(chAr, chEn, p.describe.ar, p.describe.en, { budget: budget('changes') }));
+  if (p.errors.en.length) {
+    const [a, e] = tx('problems');
+    body.push(bilingualList(`❌ ${a}`, `❌ ${e}`, p.errors.ar, p.errors.en, { budget: budget('errors'), number: false }));
+  }
+  if (p.warnings.en.length) {
+    const [a, e] = tx('warnings');
+    body.push(bilingualList(`⚠️ ${a}`, `⚠️ ${e}`, p.warnings.ar, p.warnings.en, { budget: budget('warnings'), number: false }));
+  }
+  return capBody([...head, ...body, ...tail].join('\n\n'), MAX_COMMENT);
 }
 
 /** The check comment when the code in the issue is damaged (codec error), and when it no longer holds a code. */
@@ -267,7 +276,7 @@ export function simpleComment(key, params, status = key) {
 
 export function approvalNote({ cmd, commentId, by, correction = false }) {
   return [marker(MARKERS.APPROVAL, { cmd, comment: commentId, by }),
-    correction ? `${bi('correctionReceived')}\n\n${bi('approvalReceived')}` : bi('approvalReceived')].join('\n\n');
+    correction ? `✏️ ${bi('correctionReceived')}\n\n👍 ${bi('approvalReceived')}` : `👍 ${bi('approvalReceived')}`].join('\n\n');
 }
 
 export function rejectComment() {

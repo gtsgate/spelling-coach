@@ -139,7 +139,8 @@ export function summarize(proposal, graph, lang) {
  */
 export async function buildSubmission(proposal, { graph = null, lang = 'ar', destructive = false, config = store.config, code = null } = {}) {
   const L = langOf(lang);
-  const [theCode, hash] = await Promise.all([code ? Promise.resolve(code) : encodeProposal(proposal), proposalHash(proposal)]);
+  // crypto.subtle only exists in secure contexts (https / localhost); without it the fingerprint is just left empty.
+  const [theCode, hash] = await Promise.all([code ? Promise.resolve(code) : encodeProposal(proposal), proposalHash(proposal).catch(() => '')]);
   const summary = summarize(proposal, graph, L);
   const isDestr = !!(destructive || summary.destructive || isDestructive(proposal));
   const title = issueTitle(summary.title, isDestr);

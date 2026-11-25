@@ -75,7 +75,7 @@ register({
   ar: {
     'tree.title': 'شجرة العائلة',
     'tree.familyOf': 'عائلة {name}',
-    'tree.ancestorsOf': 'آباء {name} وأجداده',
+    'tree.ancestorsOf': 'آباء وأجداد {name}',
     'tree.branch': 'الفرع',
     'tree.branchCurrent': 'المعروض الآن: {name}',
     'tree.branchCount': '{name} ({n})',
@@ -83,8 +83,8 @@ register({
     'tree.viewChart': 'مخطط',
     'tree.viewList': 'قائمة',
     'tree.direction': 'الاتجاه',
-    'tree.down': 'الأبناء والأحفاد',
-    'tree.up': 'الآباء والأجداد',
+    'tree.down': 'الذرية',
+    'tree.up': 'الأجداد',
     'tree.paternal': 'الخط الأبوي فقط',
     'tree.expandAll': 'توسيع الكل',
     'tree.collapseAll': 'طيّ الكل',
@@ -252,10 +252,12 @@ function buildVisible(g, rootP, dir, st) {
   let count = 0;
   let capped = false;
   let maxDepth = 0;
+  // Cards a person brings to the chart: themself plus one card per spouse (descendants view).
+  const weight = (p) => (dir === 'down' ? 1 + g.unionsOf(p.id).filter((u) => otherPartner(g, u, p.id)).length : 1);
   const mk = (person, depth, ref = null) => {
     const n = { id: person.id, person, depth, ref, unions: [], groups: [], spouses: [], hasKids: false, expanded: false };
     nodes.push(n);
-    count++;
+    count += ref ? 1 : weight(person);
     if (depth > maxDepth) maxDepth = depth;
     if (!ref) blood.set(person.id, n);
     return n;
@@ -272,7 +274,6 @@ function buildVisible(g, rootP, dir, st) {
     let groups;
     if (dir === 'down') {
       n.unions = g.unionsOf(n.id).map((u) => ({ union: u, spouse: otherPartner(g, u, n.id), kids: g.childrenOfUnion(u.id) }));
-      count += n.unions.filter((x) => x.spouse).length;
       groups = n.unions.filter((x) => x.kids.length);
     } else {
       const ps = g.parents(n.id);
@@ -282,7 +283,8 @@ function buildVisible(g, rootP, dir, st) {
     if (!n.hasKids) continue;
     const tog = st.toggled.get(n.id);
     if (!(tog !== undefined ? tog : defaultOpen(n))) continue;
-    const adding = groups.reduce((a, x) => a + (dir === 'down' && placedBy.has(x.union?.id) ? 0 : x.kids.length), 0);
+    const adding = groups.reduce((a, x) => a + (dir === 'down' && placedBy.has(x.union?.id) ? 0
+      : x.kids.reduce((b, p) => b + (blood.has(p.id) ? 1 : weight(p)), 0)), 0);
     if (tog !== true && count + adding > CAP) { capped = true; continue; }
     n.expanded = true;
     for (const x of groups) {
@@ -433,7 +435,7 @@ function closePopover({ restoreFocus = false } = {}) {
   el.remove();
   if (anchor && anchor.isConnected) {
     anchor.setAttribute('aria-expanded', 'false');
-    if (restoreFocus) anchor.focus({ preventScroll: true });
+    if (restoreFocus) (anchor.closest('[role="treeitem"]') || anchor).focus({ preventScroll: true });
   }
 }
 
@@ -755,6 +757,7 @@ function mountChart(stage, vis, ctx) {
     if (fs >= minRead) fit();
     else centerRoot(Math.min(1, Math.max(fs, minRead)));
   };
+  let quietFocus = false; // programmatic focus: the view is already placed, do not auto-pan
   const flash = (pid) => {
     const el = canvas.querySelector(`.tree-card[data-pid="${CSS.escape(pid)}"]`);
     if (!el) return;
@@ -762,7 +765,9 @@ function mountChart(stage, vis, ctx) {
     void el.offsetWidth; // restart the animation
     el.classList.add('is-flash');
     setTimeout(() => el.classList.remove('is-flash'), 2400);
+    quietFocus = true;
     el.focus({ preventScroll: true });
+    quietFocus = false;
   };
   const centerOn = (pid, { minScale = 0.85 } = {}) => {
     const r = pos.get(pid);
@@ -882,6 +887,7 @@ function mountChart(stage, vis, ctx) {
   };
   // Keep keyboard focus visible: pan a focused card into view.
   const onFocusIn = (e) => {
+    if (quietFocus || canvas.classList.contains('is-animating')) return;
     const el = e.target.closest('.tree-card, .tree-toggle, .tree-also');
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -1176,19 +1182,20 @@ function build(root, params, query) {
       branches.map((b) => h('option', { value: b.person.id, selected: b.person.id === rootId }, t('tree.branchCount', { name: bi(b.label) || nameOf(b.person), n: b.count })))))
     : null;
 
-  const seg = (label, items) => h('div', { class: 'segmented tree-seg', attrs: { role: 'group', 'aria-label': label } },
+  const seg = (label, cls, items) => h('div', { class: ['segmented', 'tree-seg', cls], attrs: { role: 'group', 'aria-label': label } },
     items.map((it) => h('button', {
       type: 'button',
-      attrs: { 'aria-pressed': String(it.on) },
+      attrs: { 'aria-pressed': String(it.on), 'aria-label': it.label, title: it.label },
       on: { click: () => { if (!it.on) it.go(); } },
-    }, icon(it.icon, { size: 16 }), h('span', null, it.label))));
+    }, icon(it.icon, { size: 16 }), h('span', { class: 'tree-seg-label' }, it.label))));
+  const allOpen = st.mode === 'all';
 
   const toolbar = h('div', { class: 'tree-toolbar' },
-    seg(t('tree.view'), [
+    seg(t('tree.view'), 'tree-seg-view', [
       { label: t('tree.viewChart'), icon: 'chart', on: view === 'chart', go: () => setQuery({ view: 'chart' }) },
       { label: t('tree.viewList'), icon: 'list', on: view === 'list', go: () => setQuery({ view: 'list' }) },
     ]),
-    seg(t('tree.direction'), [
+    seg(t('tree.direction'), 'tree-seg-dir', [
       { label: t('tree.down'), icon: 'arrowDown', on: dir === 'down', go: () => setQuery({ dir: 'down', view: explicitView }) },
       { label: t('tree.up'), icon: 'arrowUp', on: dir === 'up', go: () => setQuery({ dir: 'up', view: explicitView }) },
     ]),
@@ -1210,19 +1217,21 @@ function build(root, params, query) {
       }, h('span', { class: 'tree-check', attrs: { 'aria-hidden': 'true' } }, paternalOnly ? icon('check', { size: 14 }) : null), t('tree.paternal')),
       h('button', {
         type: 'button',
-        class: 'btn btn-sm btn-ghost',
-        on: { click: () => { st.mode = 'all'; st.toggled.clear(); ctx.redraw(); } },
-      }, icon('plus', { size: 16 }), t('tree.expandAll')),
-      h('button', {
-        type: 'button',
-        class: 'btn btn-sm btn-ghost',
-        on: { click: () => { st.mode = 'collapsed'; st.toggled.clear(); st.view = null; ctx.redraw(); } },
-      }, icon('minus', { size: 16 }), t('tree.collapseAll'))));
+        class: 'btn btn-sm btn-ghost tree-expand',
+        on: {
+          click: () => {
+            st.mode = allOpen ? 'collapsed' : 'all';
+            st.toggled.clear();
+            if (allOpen) st.view = null;
+            ctx.redraw();
+          },
+        },
+      }, icon(allOpen ? 'minus' : 'plus', { size: 16 }), t(allOpen ? 'tree.collapseAll' : 'tree.expandAll'))));
 
   const head = h('div', { class: 'tree-head' },
     h('div', { class: 'tree-heading' },
-      h('h1', null, t('tree.title')),
-      h('p', { class: 'tree-sub' }, bdi(t(dir === 'up' ? 'tree.ancestorsOf' : 'tree.familyOf', { name: nameOf(rootP) })))),
+      h('p', { class: 'tree-eyebrow' }, icon('tree', { size: 16 }), t('tree.title')),
+      h('h1', null, t(dir === 'up' ? 'tree.ancestorsOf' : 'tree.familyOf', { name: nameOf(rootP) }))),
     branchSelect);
 
   const notices = [];

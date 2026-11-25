@@ -8,7 +8,7 @@
 //   commitAndPush({git, branch, build, attempts = 5, sleep, log, dryRun})
 //     build(attempt) writes the files from the CURRENT working tree and returns {message, paths, value}
 //     (message null = nothing to commit). Push conflicts never rebase or merge JSON: the loop runs
-//     `git fetch` + `git reset --hard <remote>/<branch>` and calls build() again on the new base.
+//     `git fetch <remote> <branch>` + `git reset --hard FETCH_HEAD` and calls build() again on the new base.
 
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
@@ -112,7 +112,7 @@ export async function commitAndPush({
     if (attempt > 1) {
       try {
         git.fetch(remote, branch);
-        git.resetHard(`${remote}/${branch}`);
+        git.resetHard('FETCH_HEAD');
       } catch (e) {
         log(`fetch/reset failed: ${e.message}`);
         last = e;

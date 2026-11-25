@@ -520,7 +520,7 @@ function changesCard(summary) {
       h('span', { class: 'draft-op-icon', title: t(`draft.cat.${cat}`), attrs: { 'aria-hidden': 'true' } }, icon(ic, { size: 16 })),
       h('span', { class: 'draft-op-text' }, h('span', { class: 'sr-only' }, `${t(`draft.cat.${cat}`)}: `), bdi(summary.lines[i] || '')),
       h('button', {
-        type: 'button', class: 'btn-icon draft-op-remove', title: t('draft.remove', { n: i + 1 }),
+        type: 'button', class: 'btn-icon draft-op-del', title: t('draft.remove', { n: i + 1 }),
         attrs: { 'aria-label': t('draft.remove', { n: i + 1 }) },
         on: {
           click: () => {

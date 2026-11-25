@@ -150,7 +150,7 @@ function dryRun(proposal) {
  * `issue` = {number, title, url, state, user, labels} when it came from GitHub.
  */
 export async function analyzeProposal(proposal, { code = null, issue = null } = {}) {
-  const hash = await proposalHash(proposal);
+  const hash = await proposalHash(proposal).catch(() => '');
   const a = { proposal, code, hash, fp: hash.slice(0, 6), issue, result: dryRun(proposal), dataRef: store.data, subs: {} };
   await ensureSubmission(a);
   if (!a.code) a.code = a.subs[lang()]?.code || null;
@@ -262,15 +262,15 @@ function dateText(iso) {
 }
 
 function issueList(items, cls, max = 8) {
-  const ul = h('ul', { class: 'pv-issue-list' });
+  const ul = h('ul', { class: 'preview-issue-list' });
   const draw = (all) => {
     ul.replaceChildren(...(all ? items : items.slice(0, max)).map((text) => h('li', null, bdi(text))));
     if (!all && items.length > max) {
-      ul.append(h('li', { class: 'pv-more' }, h('button', { type: 'button', class: 'btn btn-ghost btn-sm', on: { click: () => draw(true) } }, t('pv.showAll', { n: items.length }))));
+      ul.append(h('li', { class: 'preview-more' }, h('button', { type: 'button', class: 'btn btn-ghost btn-sm', on: { click: () => draw(true) } }, t('pv.showAll', { n: items.length }))));
     }
   };
   draw(false);
-  return h('div', { class: `pv-issues ${cls}` }, ul);
+  return h('div', { class: `preview-issues ${cls}` }, ul);
 }
 
 async function loadIntoDraft(a, { correct = false } = {}) {
@@ -296,35 +296,35 @@ export function proposalReport(a, { compact = false } = {}) {
   const owner = ownerName();
 
   const status = res.ok
-    ? h('div', { class: 'pv-status pv-status-ok', attrs: { role: 'status' } },
-      h('span', { class: 'pv-status-icon', attrs: { 'aria-hidden': 'true' } }, '✅'),
+    ? h('div', { class: 'preview-status preview-status-ok', attrs: { role: 'status' } },
+      h('span', { class: 'preview-status-icon', attrs: { 'aria-hidden': 'true' } }, '✅'),
       h('div', null, h('strong', null, t('pv.ok')), h('p', { class: 'small' }, t('pv.okText'))))
-    : h('div', { class: 'pv-status pv-status-bad', attrs: { role: 'status' } },
-      h('span', { class: 'pv-status-icon', attrs: { 'aria-hidden': 'true' } }, '❌'),
+    : h('div', { class: 'preview-status preview-status-bad', attrs: { role: 'status' } },
+      h('span', { class: 'preview-status-icon', attrs: { 'aria-hidden': 'true' } }, '❌'),
       h('div', null, h('strong', null, t('pv.bad')), h('p', { class: 'small' }, t('pv.badText'))));
 
   const sub = p.submitter || {};
   const subPerson = sub.personId ? graph.person(sub.personId) : null;
   const subText = [sub.name, sub.relation].map((x) => String(x || '').trim()).filter(Boolean).join(' — ');
-  const meta = h('dl', { class: 'pv-meta' },
-    h('div', null, h('dt', null, t('pv.fp')), h('dd', null, h('code', { class: 'pv-fp', dir: 'ltr' }, a.fp))),
+  const meta = h('dl', { class: 'preview-meta' },
+    h('div', null, h('dt', null, t('pv.fp')), h('dd', null, h('code', { class: 'preview-fp', dir: 'ltr' }, a.fp))),
     h('div', null, h('dt', null, t('pv.submitter')), h('dd', null, subText ? bdi(subText) : h('span', { class: 'muted' }, t('pv.noSubmitter')), subPerson ? personChip(subPerson, { years: false }) : null)),
     compact ? null : h('div', null, h('dt', null, t('pv.id')), h('dd', null, h('code', { dir: 'ltr' }, String(p.id || '')))),
     compact || !p.createdAt ? null : h('div', null, h('dt', null, t('pv.created')), h('dd', null, dateText(p.createdAt))),
     compact ? null : h('div', null, h('dt', null, t('pv.revision')), h('dd', null, t('pv.revisionText', { n: Number(p.baseRevision) || 0, m: store.data?.meta?.revision ?? 0 }))),
     a.issue ? h('div', null, h('dt', null, 'GitHub'), h('dd', null, h('a', { href: a.issue.url, target: '_blank', rel: 'noopener' }, t('pv.fromIssue', { n: a.issue.number })))) : null);
 
-  const errors = res.errors?.length ? h('section', { class: 'pv-block pv-errors' },
+  const errors = res.errors?.length ? h('section', { class: 'preview-block preview-errors' },
     h('h3', null, icon('warning', { size: 18 }), t('pv.errors')),
-    issueList(res.errors.map((e) => formatIssue(e, L, ctx)), 'pv-issues-danger')) : null;
-  const warnings = res.warnings?.length ? h('section', { class: 'pv-block pv-warnings' },
+    issueList(res.errors.map((e) => formatIssue(e, L, ctx)), 'preview-issues-danger')) : null;
+  const warnings = res.warnings?.length ? h('section', { class: 'preview-block preview-warnings' },
     h('h3', null, icon('info', { size: 18 }), t('pv.warnings')),
-    issueList(res.warnings.map((w) => formatIssue(w, L, ctx)), 'pv-issues-warning', compact ? 3 : 8)) : null;
+    issueList(res.warnings.map((w) => formatIssue(w, L, ctx)), 'preview-issues-warning', compact ? 3 : 8)) : null;
 
   const touched = [...new Set(res.touched?.people || [])].map((id) => graph.person(id)).filter(Boolean).slice(0, 12);
-  const changes = h('section', { class: 'pv-block' },
+  const changes = h('section', { class: 'preview-block' },
     h('h3', null, t('pv.changes'), ' ', h('span', { class: 'muted small' }, `(${p.ops.length})`)),
-    h('ol', { class: 'pv-lines' }, summary.lines.map((line) => h('li', null, bdi(line)))));
+    h('ol', { class: 'preview-lines' }, summary.lines.map((line) => h('li', null, bdi(line)))));
 
   // Actions
   const s = a.subs[L] || null;
@@ -332,41 +332,41 @@ export function proposalReport(a, { compact = false } = {}) {
   let ownerBox = null;
   if (a.issue) {
     const cmd = `/${destructive ? 'approve-deletion' : 'approve'} ${a.fp}`;
-    ownerBox = h('div', { class: 'pv-owner' },
-      h('p', { class: 'pv-owner-title' }, icon('star', { size: 16 }), h('strong', null, t('pv.ownerTitle', { owner }))),
+    ownerBox = h('div', { class: 'preview-owner' },
+      h('p', { class: 'preview-owner-title' }, icon('star', { size: 16 }), h('strong', null, t('pv.ownerTitle', { owner }))),
       a.issue.state === 'closed' ? h('p', { class: 'small muted' }, t('pv.issueClosed')) : null,
       h('p', { class: 'small' }, t('pv.ownerIssueText')),
-      h('div', { class: 'pv-command' },
+      h('div', { class: 'preview-command' },
         h('code', { dir: 'ltr' }, cmd),
         h('button', { type: 'button', class: 'btn btn-sm', on: { click: () => copyText(cmd).then((ok) => ok && toast(t('pv.commandCopied'), { type: 'success' })) } }, icon('copy', { size: 16 }), t('pv.copyCommand'))),
       h('a', { class: 'btn btn-sm', href: a.issue.url, target: '_blank', rel: 'noopener' }, icon('github', { size: 16 }), t('pv.openIssue', { n: a.issue.number })));
   } else {
     const create = h('a', {
-      class: ['btn', destructive ? 'btn-danger' : 'btn-primary', 'pv-approve'], target: '_blank', rel: 'noopener',
+      class: ['btn', destructive ? 'btn-danger' : 'btn-primary', 'preview-approve'], target: '_blank', rel: 'noopener',
       href: s ? s.approveIssueUrl : undefined, attrs: { 'aria-disabled': s ? null : 'true' },
       on: { click: (e) => { if (!a.subs[lang()]) e.preventDefault(); } },
     }, icon('github', { size: 18 }), destructive ? t('pv.createApproveDel') : t('pv.createApprove'));
-    ownerBox = h('div', { class: 'pv-owner' },
-      h('p', { class: 'pv-owner-title' }, icon('star', { size: 16 }), h('strong', null, t('pv.ownerTitle', { owner }))),
+    ownerBox = h('div', { class: 'preview-owner' },
+      h('p', { class: 'preview-owner-title' }, icon('star', { size: 16 }), h('strong', null, t('pv.ownerTitle', { owner }))),
       h('p', { class: 'small muted' }, t('pv.ownerCodeText')),
       create);
   }
 
-  return h('article', { class: ['card', 'pv-report', res.ok ? 'is-ok' : 'is-bad'] },
-    h('header', { class: 'pv-report-head' },
-      h('h2', { class: 'pv-report-title' }, bdi(summary.title)),
-      h('span', { class: 'pv-source small muted' }, a.issue ? t('pv.fromIssue', { n: a.issue.number }) : t('pv.fromCode'))),
+  return h('article', { class: ['card', 'preview-report', res.ok ? 'is-ok' : 'is-bad'] },
+    h('header', { class: 'preview-report-head' },
+      h('h2', { class: 'preview-report-title' }, bdi(summary.title)),
+      h('span', { class: 'preview-source small muted' }, a.issue ? t('pv.fromIssue', { n: a.issue.number }) : t('pv.fromCode'))),
     status,
     applied ? h('div', { class: 'notice notice-success' }, icon('check'), h('p', null, applied.issue ? t('pv.applied', { n: applied.issue }) : t('pv.appliedNoIssue'))) : null,
     destructive ? h('div', { class: 'notice notice-warning' }, icon('warning'), h('p', null, t('pv.destructive'))) : null,
     (p.dependsOn || []).length ? h('p', { class: 'small muted' }, icon('link', { size: 16 }), ' ', t('pv.depends', { n: p.dependsOn.length })) : null,
     meta,
-    p.note ? h('blockquote', { class: 'pv-note' }, h('span', { class: 'small muted' }, t('pv.note')), h('p', null, bdi(p.note))) : null,
+    p.note ? h('blockquote', { class: 'preview-note' }, h('span', { class: 'small muted' }, t('pv.note')), h('p', null, bdi(p.note))) : null,
     errors,
     warnings,
     changes,
-    touched.length && !compact ? h('section', { class: 'pv-block' }, h('h3', null, t('pv.people')), h('div', { class: 'chips' }, touched.map((x) => personChip(x)))) : null,
-    h('div', { class: 'pv-actions' },
+    touched.length && !compact ? h('section', { class: 'preview-block' }, h('h3', null, t('pv.people')), h('div', { class: 'chips' }, touched.map((x) => personChip(x)))) : null,
+    h('div', { class: 'preview-actions' },
       h('div', { class: 'row' },
         h('button', { type: 'button', class: 'btn', on: { click: () => loadIntoDraft(a) } }, icon('download', { size: 18 }), t('pv.load')),
         h('button', { type: 'button', class: 'btn', on: { click: () => loadIntoDraft(a, { correct: true }) } }, icon('edit', { size: 18 }), t('pv.correct'))),
@@ -404,12 +404,12 @@ function load(key, params, query, { force = false } = {}) {
 
 function pasteBox() {
   const area = h('textarea', {
-    id: 'pv-paste', class: 'textarea pv-paste', rows: 5, dir: 'ltr', placeholder: t('pv.pastePh'), value: pasteText, spellcheck: false,
+    id: 'preview-paste', class: 'textarea preview-paste', rows: 5, dir: 'ltr', placeholder: t('pv.pastePh'), value: pasteText, spellcheck: false,
     on: { input: (e) => { pasteText = e.target.value; } },
   });
   area.value = pasteText;
   return h('form', {
-    class: 'card stack pv-paste-card',
+    class: 'card stack preview-paste-card',
     on: {
       submit: (e) => {
         e.preventDefault();
@@ -420,7 +420,7 @@ function pasteBox() {
     },
   },
   h('h2', null, t('pv.pasteTitle')),
-  h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'pv-paste' }, t('pv.pasteLabel')), area),
+  h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'preview-paste' }, t('pv.pasteLabel')), area),
   h('div', { class: 'row row-end' }, h('button', { type: 'submit', class: 'btn btn-primary' }, icon('eye', { size: 18 }), t('pv.pasteBtn'))));
 }
 
@@ -433,13 +433,13 @@ function render(root, params = {}, query = {}) {
   if (!key) { root.append(pasteBox()); return; }
   if (S.key !== key) load(key, params, query);
   if (S.status === 'loading') {
-    root.append(h('div', { class: 'card pv-loading' }, spinner(params.issue ? t('pv.fetching', { n: params.issue }) : t('pv.loading'))));
+    root.append(h('div', { class: 'card preview-loading' }, spinner(params.issue ? t('pv.fetching', { n: params.issue }) : t('pv.loading'))));
     return;
   }
   if (S.status === 'error') {
     const e = S.error;
     const retry = ['rateLimit', 'network', 'http', 'forbidden'].includes(e?.kind);
-    root.append(h('div', { class: 'notice notice-danger pv-error', attrs: { role: 'alert' } }, icon('warning'),
+    root.append(h('div', { class: 'notice notice-danger preview-error', attrs: { role: 'alert' } }, icon('warning'),
       h('div', null,
         h('p', null, errorText(e, params.issue)),
         retry ? h('button', { type: 'button', class: 'btn btn-sm', on: { click: () => { load(key, params, query, { force: true }); rerender(); } } }, icon('restore', { size: 16 }), t('pv.retry')) : null,

@@ -53,10 +53,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # The default branch (an empty ref means the event's own ref, which is the default branch for these events).
       - name: Check out the default branch (full history, for /undo)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.repository.default_branch || 'main' }}
+          ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
       - name: Set up Node.js
@@ -68,5 +69,6 @@ jobs:
         working-directory: ${{ env.PORTAL_DIR }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GFT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+          # Empty for events without a repository payload: the script then asks the REST API.
+          GFT_BRANCH: ${{ github.event.repository.default_branch }}
         run: node scripts/apply-proposal.mjs

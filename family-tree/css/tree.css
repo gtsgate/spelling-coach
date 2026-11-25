@@ -19,8 +19,17 @@
   margin-block-end: var(--s3);
 }
 .tree-heading { min-inline-size: 0; }
-.tree-heading h1 { margin: 0; font-size: var(--fs-xl); }
-.tree-sub { margin: 0; color: var(--ink-2); font-size: .98rem; }
+.tree-heading h1 { margin: 0; font-size: var(--fs-xl); line-height: 1.35; }
+.tree-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--gold-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: .02em;
+}
 .tree-branch { display: flex; align-items: center; gap: var(--s2); min-inline-size: 0; max-inline-size: 100%; }
 .tree-branch-label { flex: none; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
 .tree-branch .select { flex: 1 1 auto; min-inline-size: 0; inline-size: auto; max-inline-size: min(380px, 100%); min-block-size: var(--tap); }
@@ -51,12 +60,19 @@
 .tree-notice-body { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
 
 @media (max-width: 760px) {
-  .tree-head { align-items: stretch; }
+  .tree-head { align-items: stretch; gap: var(--s2); }
+  .tree-heading h1 { font-size: var(--fs-lg); }
   .tree-branch { flex: 1 1 100%; }
   .tree-branch .select { max-inline-size: none; }
-  .tree-seg { flex: 1 1 auto; }
+  .tree-seg-dir { flex: 1 1 auto; }
   .tree-seg > button { padding-inline: 10px; }
   .tree-actions { margin-inline-start: 0; inline-size: 100%; justify-content: space-between; }
+}
+@media (max-width: 520px) {
+  .tree-eyebrow { display: none; }
+  .tree-seg-view .tree-seg-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tree-seg-view > button { padding-inline: 12px; }
+  .tree-hint { display: none; }
 }
 
 /* ---- Chart stage --------------------------------------------------------- */
@@ -81,7 +97,6 @@
   overscroll-behavior: contain;
 }
 .tree-viewport.is-dragging { cursor: grabbing; }
-.tree-viewport.is-dragging .tree-card { cursor: grabbing; }
 .tree-viewport:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 760px) {
   .view.tree-is-chart { padding-inline: var(--s2); padding-block-end: var(--s2); }
@@ -172,7 +187,7 @@
 }
 .tree-card .pname-other,
 .tree-card-years { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; }
-.tree-card .pname-other { font-size: .72rem; }
+.tree-card .pname-other { font-size: .72rem; text-align: end; } /* always the opposite direction of the page → aligns with the page start */
 .tree-card-years { font-size: .74rem; color: var(--ink-2); }
 .tree-card-badges {
   position: absolute;
