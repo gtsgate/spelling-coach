@@ -1,0 +1,67 @@
+# Family tree — tests and data validation (docs/SPEC.md §6.4 in the portal folder).
+#
+# PORTAL_DIR is the folder that holds index.html, data/ and scripts/ ("." once the portal is its own repository).
+# GitHub cannot use variables in `paths:` filters, so they list both layouts: the sub-folder (family-tree/**) and
+# the portal's own folders at the repository root (after a move). Adjust them if the folder name changes.
+name: "Family tree · CI"
+
+on:
+  push:
+    paths:
+      - "family-tree/**"
+      - "js/**"
+      - "css/**"
+      - "data/**"
+      - "scripts/**"
+      - "tests/**"
+      - "config.json"
+      - "package.json"
+      - ".github/workflows/family-tree-*.yml"
+      - ".github/ISSUE_TEMPLATE/family-tree-*.yml"
+  pull_request:
+    paths:
+      - "family-tree/**"
+      - "js/**"
+      - "css/**"
+      - "data/**"
+      - "scripts/**"
+      - "tests/**"
+      - "config.json"
+      - "package.json"
+      - ".github/workflows/family-tree-*.yml"
+      - ".github/ISSUE_TEMPLATE/family-tree-*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PORTAL_DIR: family-tree
+
+concurrency:
+  group: family-tree-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ${{ env.PORTAL_DIR }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Run the tests
+        run: node --test
+
+      - name: Validate the data files
+        run: node scripts/validate-data.mjs

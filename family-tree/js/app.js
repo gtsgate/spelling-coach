@@ -6,7 +6,7 @@ import { store } from './store.js';
 
 register({
   en: {
-    'shell.unsent': 'You have {n} unsent changes',
+    'shell.unsent': ({ n }) => (n === 1 ? 'You have 1 unsent change' : `You have ${n} unsent changes`),
     'shell.send': 'Review & send',
     'shell.publishing': 'Publishing the latest update… this page will refresh by itself.',
     'shell.publishTimeout': 'The update is taking longer than usual to appear. Please check again in a few minutes.',
@@ -16,7 +16,9 @@ register({
     'shell.digits': 'Digits',
   },
   ar: {
-    'shell.unsent': 'لديك {n} تعديلات لم تُرسل بعد',
+    'shell.unsent': ({ n }) => (n === 1 ? 'لديك تعديل واحد لم يُرسل بعد'
+      : n === 2 ? 'لديك تعديلان لم يُرسلا بعد'
+        : n <= 10 ? `لديك ${n} تعديلات لم تُرسل بعد` : `لديك ${n} تعديلاً لم يُرسل بعد`),
     'shell.send': 'مراجعة وإرسال',
     'shell.publishing': 'جارٍ نشر التحديث الأخير… ستتحدّث الصفحة تلقائياً.',
     'shell.publishTimeout': 'يستغرق ظهور التحديث وقتاً أطول من المعتاد. يُرجى التحقق بعد دقائق.',
@@ -262,10 +264,12 @@ async function render() {
     mount(main, errorBox(e));
   }
   if (routeKey !== lastRouteKey) {
+    const firstRender = lastRouteKey === '';
     lastRouteKey = routeKey;
     window.scrollTo(0, 0);
-    // Move focus to the main region for screen-reader users on navigation.
-    main.focus({ preventScroll: true });
+    // Move focus to the main region for screen-reader users on navigation — but not on the initial
+    // page load, so the first Tab still reaches the skip link and the header.
+    if (!firstRender) main.focus({ preventScroll: true });
   }
 }
 

@@ -1,0 +1,25 @@
+{
+  "action": "opened",
+  "issue": {
+    "number": 101,
+    "title": "🌳 Add “Yousef” and “Maryam”",
+    "body": "### رمز التعديلات — لا تغيير فيه · Change code — do not edit\n\n```text\nGFT1:fc9BS8MwGAbgv1LecwppweFy8-DBkzA8OXbIlnSLtklI0jkpPewwkP0R8SAy9mfafyOpTFFh13x53-_5GjwqLcCwLEJqnbHG8xIEa7CMQMVJsaFCVobSDAQLJ3mQ4iqAIaf5KM2yNL-4o2NGKaP0HgRz7uVErpVXRg8tQlqphb_VYNMZga_nlQpBOrAGmlcSDN2xe-0O3RsInCx5GKLo3vttv-8-hncrnTf6JorQEmgTYvB6wytbyqRQm1A7mRTGJcI9J67WHgTGerBpA2PBwIVIv1qGNQUYtHzKvrt_PA24A0O_71-6Y7-N-5ZSi0hGFU9ULqziN8EHRTYeU7QtQan04xD3YFisVCkiIm6yy8sFf-Cj2FVrZfTkBKgztOQsMT9D3HWHft_vfhEL_KV4a2ovT5bh6v-OHO2s_QQ.r1uwcf\n```\n\n### اسمك وصلة القرابة (اختياري) · Your name and relation (optional)\n\nسارة — حفيدة\n\n### ملاحظة للمشرف (اختيارية) · Note for the tree keeper (optional)\n\n_No response_",
+    "state": "open",
+    "labels": [
+      {
+        "name": "family-tree"
+      }
+    ],
+    "user": {
+      "login": "relative-sara"
+    },
+    "created_at": "2026-11-25T09:05:00Z"
+  },
+  "repository": {
+    "full_name": "gtsgate/spelling-coach",
+    "default_branch": "main"
+  },
+  "sender": {
+    "login": "relative-sara"
+  }
+}

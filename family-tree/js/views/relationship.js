@@ -9,6 +9,9 @@ import { nameOf, lineageOf, avatar, nameLabel, personChip, yearsOf, badges, what
 import { personPicker } from '../forms/picker.js';
 import { findRelationship, relationLabel, pathSteps } from '../core/kinship.js';
 
+/** Element.append without the "null" text nodes it would create for skipped (null/false) children. */
+const add = (el, ...kids) => el.append(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
+
 register({
   en: {
     'rel.title': 'How are we related?',
@@ -33,6 +36,8 @@ register({
     'rel.pathHint': 'Each step says who the next person is to the one before.',
     'rel.stepOf': '{role} of the person above',
     'rel.commonAncestor': 'Common ancestor',
+    'rel.commonAncestorM': 'Common ancestor',
+    'rel.commonAncestorF': 'Common ancestor',
     'rel.copyLink': 'Copy link',
     'rel.linkCopied': 'Link copied — it opens this comparison directly.',
     'rel.shareWhatsApp': 'Share on WhatsApp',
@@ -65,7 +70,9 @@ register({
     'rel.pathTitle': 'صلة القرابة خطوةً بخطوة',
     'rel.pathHint': 'كل خطوة تبيّن صلة الشخص التالي بالشخص الذي قبله.',
     'rel.stepOf': '{role} الشخص السابق',
-    'rel.commonAncestor': 'الجدّ المشترك',
+    'rel.commonAncestor': 'الأصل المشترك',
+    'rel.commonAncestorM': 'الجدّ المشترك',
+    'rel.commonAncestorF': 'الجدّة المشتركة',
     'rel.copyLink': 'نسخ الرابط',
     'rel.linkCopied': 'نُسخ الرابط — يفتح هذه المقارنة مباشرة.',
     'rel.shareWhatsApp': 'مشاركة عبر واتساب',
@@ -204,7 +211,7 @@ function result(graph, aP, bP) {
     reverse = you ? t('rel.youAre', { rel: back.label }) : t('rel.theyAre', { name: nameOf(aP), rel: back.label });
   }
 
-  const lca = main.rel && main.type === 'blood' && main.rel.lca && main.rel.up > 0 && main.rel.down > 0 && main.rel.lca !== aP.id && main.rel.lca !== bP.id
+  const lca = main.rel && main.type === 'blood' && main.rel.lca && main.rel.up >= 2 && main.rel.down > 0 && main.rel.lca !== aP.id && main.rel.lca !== bP.id
     ? graph.person(main.rel.lca) : null;
 
   const headline = h('div', { class: ['card', 'rel-result', `rel-result-${main.type}`], attrs: { 'aria-live': 'polite' } },
@@ -212,7 +219,7 @@ function result(graph, aP, bP) {
     h('p', { class: 'rel-headline' }, bdi(main.text)),
     reverse ? h('p', { class: 'rel-reverse muted' }, bdi(reverse)) : null,
     main.type === 'none' ? h('p', { class: 'muted small rel-none-hint' }, t('rel.noneHint')) : null,
-    lca ? h('div', { class: 'rel-lca' }, h('span', { class: 'muted small' }, t('rel.commonAncestor')), personChip(lca, { years: false })) : null,
+    lca ? h('div', { class: 'rel-lca' }, h('span', { class: 'muted small' }, t(lca.gender === 'm' ? 'rel.commonAncestorM' : lca.gender === 'f' ? 'rel.commonAncestorF' : 'rel.commonAncestor')), personChip(lca, { years: false })) : null,
     h('div', { class: 'rel-actions row' },
       h('button', {
         type: 'button', class: 'btn btn-sm',
@@ -263,15 +270,15 @@ function render(root, params) {
       }, icon('move', { size: 20 }))),
     slot({ which: 'b', person: bP, missing: !!rawB && !bP, label: t('rel.second'), other: aP?.id, onPick: (id) => go(aP?.id || null, id) }));
 
-  root.append(
+  add(root, 
     h('header', { class: 'page-head rel-head' },
       h('h1', null, t('rel.title')),
       h('p', { class: 'lead' }, t('rel.lead'))),
     pickers);
 
-  if (aP && bP) root.append(result(graph, aP, bP));
+  if (aP && bP) add(root, result(graph, aP, bP));
   else {
-    root.append(h('p', { class: 'rel-waiting muted' },
+    add(root, h('p', { class: 'rel-waiting muted' },
       icon('info', { size: 18 }), h('span', null, aP ? t('rel.pickBoth') : (store.me ? t('rel.lead') : t('rel.meHint')))));
   }
 }

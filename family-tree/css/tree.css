@@ -1,0 +1,413 @@
+/* ==========================================================================
+   Tree view (js/views/tree.js) — #/tree/:id?  chart (descendants / ancestors) and outline list.
+   Uses base.css tokens only. Logical properties throughout; the chart canvas is an LTR coordinate
+   space (positions are mirrored in JS for Arabic) and every card carries the page direction itself.
+   ========================================================================== */
+
+/* ---- Page frame ---------------------------------------------------------- */
+.view.tree-view { padding-block-end: var(--s4); }
+.view.tree-is-chart { max-inline-size: none; }
+.view.tree-is-list > :is(.tree-head, .tree-toolbar, .tree-notice, .tree-stage) { max-inline-size: 900px; margin-inline: auto; }
+@media (min-width: 761px) { .view.tree-is-chart { padding-block-start: var(--s5); padding-inline: var(--s5); } }
+
+.tree-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s3) var(--s5);
+  margin-block-end: var(--s3);
+}
+.tree-heading { min-inline-size: 0; }
+.tree-heading h1 { margin: 0; font-size: var(--fs-xl); }
+.tree-sub { margin: 0; color: var(--ink-2); font-size: .98rem; }
+.tree-branch { display: flex; align-items: center; gap: var(--s2); min-inline-size: 0; max-inline-size: 100%; }
+.tree-branch-label { flex: none; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
+.tree-branch .select { flex: 1 1 auto; min-inline-size: 0; inline-size: auto; max-inline-size: min(380px, 100%); min-block-size: var(--tap); }
+
+.tree-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  margin-block-end: var(--s3);
+}
+.tree-seg { flex: none; }
+.tree-seg > button .icon { opacity: .8; }
+.tree-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); margin-inline-start: auto; }
+.tree-paternal { gap: 8px; font-size: var(--fs-sm); font-weight: 600; padding-inline: 10px 14px; }
+.tree-check {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 20px;
+  block-size: 20px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--accent-ink);
+}
+.tree-paternal[aria-pressed="true"] .tree-check { background: var(--accent); border-color: var(--accent); }
+.tree-notice { margin-block: 0 var(--s3); }
+.tree-notice-body { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+
+@media (max-width: 760px) {
+  .tree-head { align-items: stretch; }
+  .tree-branch { flex: 1 1 100%; }
+  .tree-branch .select { max-inline-size: none; }
+  .tree-seg { flex: 1 1 auto; }
+  .tree-seg > button { padding-inline: 10px; }
+  .tree-actions { margin-inline-start: 0; inline-size: 100%; justify-content: space-between; }
+}
+
+/* ---- Chart stage --------------------------------------------------------- */
+.tree-stage { position: relative; }
+.tree-stage-chart { --tree-top: 230px; }
+.tree-viewport {
+  position: relative;
+  overflow: hidden;
+  block-size: max(360px, calc(100vh - var(--tree-top) - var(--tabbar-h) - var(--draftbar-h) - 20px));
+  block-size: max(360px, calc(100dvh - var(--tree-top) - var(--tabbar-h) - var(--draftbar-h) - 20px));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background-color: var(--surface-2);
+  background-image: radial-gradient(circle at center, color-mix(in srgb, var(--line-strong) 60%, transparent) 1.1px, transparent 1.4px);
+  background-size: 24px 24px;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, .04);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: contain;
+}
+.tree-viewport.is-dragging { cursor: grabbing; }
+.tree-viewport.is-dragging .tree-card { cursor: grabbing; }
+.tree-viewport:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .view.tree-is-chart { padding-inline: var(--s2); padding-block-end: var(--s2); }
+  .view.tree-is-chart > :is(.tree-head, .tree-toolbar, .tree-notice) { padding-inline: var(--s2); }
+  .tree-viewport { border-radius: var(--radius); }
+}
+
+.tree-canvas {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.tree-canvas.is-animating { transition: transform .3s var(--ease); }
+.tree-lines { position: absolute; inset-block-start: 0; inset-inline-start: 0; overflow: visible; pointer-events: none; }
+.tree-link { fill: none; stroke: color-mix(in srgb, var(--ink-3) 75%, transparent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tree-couple { fill: none; stroke: var(--gold); stroke-width: 2; stroke-linecap: round; }
+.tree-knot { fill: var(--surface); stroke: var(--gold); stroke-width: 2; }
+
+/* ---- Cards --------------------------------------------------------------- */
+.tree-card {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  display: block;
+  inline-size: var(--cw, 184px);
+  block-size: var(--ch, 92px);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+  font: inherit;
+  line-height: 1.3;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .2s;
+}
+/* Positioned boxes sit in the canvas' LTR space; .tree-in carries the page direction (set in JS). */
+.tree-in {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  inline-size: 100%;
+  block-size: 100%;
+  padding-block: 8px;
+  padding-inline: 10px 12px;
+  text-align: start;
+}
+/* blood descendants / ancestors carry a thin gold rule; married-in spouses do not */
+.tree-card:not(.tree-card-spouse):not(.tree-card-ref) > .tree-in::before {
+  content: "";
+  position: absolute;
+  inset-block: 14px;
+  inset-inline-start: 0;
+  inline-size: 3px;
+  border-start-end-radius: 3px;
+  border-end-end-radius: 3px;
+  background: var(--gold);
+}
+.tree-card-spouse { background: color-mix(in srgb, var(--surface) 72%, var(--surface-2)); }
+@media (hover: hover) { .tree-card:hover { border-color: var(--accent); box-shadow: var(--shadow); } }
+.tree-card[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
+.tree-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.tree-card.is-root { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft), var(--shadow); }
+.tree-card.is-me { border-color: var(--accent); }
+.tree-card.is-draft { border: 1.5px dashed var(--pending); background: color-mix(in srgb, var(--pending-soft) 80%, var(--surface)); }
+.tree-card.is-sent { border: 1.5px dashed var(--sent); background: color-mix(in srgb, var(--sent-soft) 80%, var(--surface)); }
+.tree-card.is-deceased { background: var(--deceased); box-shadow: none; }
+.tree-card.is-deceased .pname-main { color: var(--ink-2); }
+.tree-card.is-deceased .avatar { filter: grayscale(.55); opacity: .9; }
+.tree-card.is-flash { animation: tree-flash 2.2s var(--ease); }
+
+.tree-card .avatar { --size: 40px; }
+.tree-card-text { display: flex; flex-direction: column; flex: 1; min-inline-size: 0; gap: 2px; }
+.tree-card .pname { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; row-gap: 0; min-inline-size: 0; }
+.tree-card .pname-main {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: .94rem;
+  line-height: 1.35;
+}
+.tree-card .pname-other,
+.tree-card-years { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; }
+.tree-card .pname-other { font-size: .72rem; }
+.tree-card-years { font-size: .74rem; color: var(--ink-2); }
+.tree-card-badges {
+  position: absolute;
+  inset-block-start: -10px;
+  inset-inline-end: 10px;
+  display: flex;
+  gap: 3px;
+}
+.tree-card-badges .badge { min-inline-size: 20px; justify-content: center; padding: 0 6px; font-size: .7rem; line-height: 1.6; box-shadow: 0 0 0 2px var(--surface); }
+
+/* Compact card: the same person drawn elsewhere (cousin marriage / pedigree collapse) */
+.tree-card-ref {
+  block-size: var(--rh, 62px);
+  border-style: dashed;
+  border-color: var(--line-strong);
+  background: var(--surface);
+  box-shadow: none;
+}
+.tree-card-ref > .tree-in { gap: 8px; padding-inline: 8px 10px; }
+.tree-ref-icon { display: inline-grid; place-items: center; flex: none; inline-size: 32px; block-size: 32px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+.tree-ref-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-names); font-weight: 700; font-size: .88rem; }
+.tree-ref-note { font-size: .74rem; font-weight: 600; color: var(--accent); }
+
+/* Fold / unfold toggle sitting on the card edge */
+.tree-toggle {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 28px;
+  block-size: 28px;
+  padding: 0 8px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+  font: inherit;
+  font-size: .76rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tree-toggle::before { content: ""; position: absolute; inset-block: -9px; inset-inline: -8px; }
+.tree-toggle.is-closed { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+@media (hover: hover) {
+  .tree-toggle:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .tree-toggle.is-closed:hover { background: var(--accent-hover); color: var(--accent-ink); }
+}
+.tree-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* "Also married to …" link under a spouse card */
+.tree-also {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  display: block;
+  inline-size: var(--cw, 184px);
+  min-block-size: 26px;
+  padding: 0;
+  border: 1px solid var(--gold-line);
+  border-radius: var(--radius-pill);
+  background: var(--gold-soft);
+  color: var(--gold-ink);
+  font: inherit;
+  font-size: .72rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+.tree-also::before { content: ""; position: absolute; inset-block: -9px; inset-inline: 0; }
+.tree-also > .tree-in { gap: 5px; min-block-size: 24px; padding: 2px 10px; }
+.tree-also .icon { flex: none; }
+.tree-also-text { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-also-n { font-weight: 500; }
+@media (hover: hover) { .tree-also:hover { border-color: var(--gold); color: var(--gold-ink); background: color-mix(in srgb, var(--gold-soft) 70%, var(--surface)); } }
+
+/* Zoom controls & hint (page direction) */
+.tree-zoom {
+  position: absolute;
+  inset-block-end: 14px;
+  inset-inline-end: 14px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.tree-zoom .btn.btn-icon { min-block-size: var(--tap); border-color: transparent; background: transparent; color: var(--ink); box-shadow: none; }
+@media (hover: hover) { .tree-zoom .btn.btn-icon:hover { background: var(--surface-2); color: var(--accent); } }
+.tree-hint {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline: 0;
+  z-index: 2;
+  inline-size: fit-content;
+  max-inline-size: calc(100% - 24px);
+  margin-block: 0;
+  margin-inline: auto;
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  text-align: center;
+  pointer-events: none;
+  animation: tree-hint 7s var(--ease) forwards;
+}
+
+/* ---- Popover ------------------------------------------------------------- */
+.tree-pop {
+  position: absolute;
+  inset-block-start: var(--pop-y, 0);
+  inset-inline-start: var(--pop-x, 0);
+  z-index: 30;
+  inline-size: min(320px, calc(100% - 16px));
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  animation: gft-pop .16s var(--ease);
+}
+.tree-pop-head { display: flex; align-items: center; gap: 12px; padding-block: 6px 10px; padding-inline: 8px 4px; margin-block-end: 4px; border-block-end: 1px solid var(--line); }
+.tree-pop-id { display: flex; flex-direction: column; flex: 1; min-inline-size: 0; line-height: 1.45; }
+.tree-pop-lineage { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-pop-close { flex: none; align-self: flex-start; }
+.tree-pop-list .sheet-item { min-block-size: var(--tap); padding-block: 4px; font-size: .95rem; }
+.tree-pop-list .sheet-item > .icon { padding: 6px; }
+
+/* ---- Outline list -------------------------------------------------------- */
+.tree-list, .tree-group { list-style: none; margin: 0; padding: 0; }
+.tree-list {
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.tree-group { margin-inline-start: 26px; padding-inline-start: 8px; border-inline-start: 1.5px solid var(--line); }
+.tree-li { outline: none; }
+.tree-li:focus-visible > .tree-row { outline: 3px solid var(--accent); outline-offset: -3px; }
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 60px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color .12s;
+}
+@media (hover: hover) { .tree-row:hover { background: var(--surface-2); } }
+.tree-row.is-root { background: color-mix(in srgb, var(--gold-soft) 60%, var(--surface)); }
+.tree-row.is-root .pname-main { font-size: 1.08rem; }
+.tree-row.is-draft { background: var(--pending-soft); outline: 1.5px dashed var(--pending); outline-offset: -2px; }
+.tree-row.is-sent { background: var(--sent-soft); outline: 1.5px dashed var(--sent); outline-offset: -2px; }
+.tree-row.is-deceased .avatar { filter: grayscale(.55); opacity: .9; }
+.tree-row.is-ref { opacity: .92; }
+.tree-row.is-flash { animation: tree-flash-row 2.2s var(--ease); }
+.tree-row-toggle {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 36px;
+  block-size: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--accent);
+  cursor: pointer;
+}
+.tree-row-toggle::before { content: ""; position: absolute; inset-block: -4px; inset-inline: -4px; }
+.tree-row-toggle.is-open { background: var(--accent-soft); }
+.tree-row-toggle.is-leaf { background: transparent; cursor: default; }
+.tree-row-toggle.is-leaf::after { content: ""; inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--line-strong); }
+@media (hover: hover) { .tree-row-toggle:not(.is-leaf):hover { background: var(--accent); color: var(--accent-ink); } }
+.tree-row-main { display: flex; flex-direction: column; flex: 1; min-inline-size: 0; gap: 1px; }
+.tree-row-title { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; line-height: 1.45; }
+.tree-row-spouses, .tree-row-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); color: var(--ink-2); line-height: 1.5; }
+.tree-row-spouses .icon { color: var(--gold); margin-inline-end: 5px; }
+.tree-row-count { color: var(--accent); font-weight: 600; }
+.tree-row-jump { flex: none; }
+.tree-group-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 10px 8px 2px;
+  color: var(--gold-ink);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.tree-group-label .btn { min-block-size: 32px; font-size: var(--fs-xs); }
+@media (max-width: 520px) {
+  .tree-list { padding: 4px; }
+  .tree-group { margin-inline-start: 15px; padding-inline-start: 4px; }
+  .tree-row { gap: 8px; padding-inline: 4px 6px; }
+  .tree-row .pname-other { display: none; }
+}
+@media (max-width: 700px) {
+  .tree-card .pname-other { display: none; }
+}
+
+/* ---- Motion ---------------------------------------------------------------- */
+@keyframes tree-flash {
+  0%, 55% { box-shadow: 0 0 0 5px var(--gold), var(--shadow-lg); }
+  100% { box-shadow: 0 0 0 0 transparent, var(--shadow-sm); }
+}
+@keyframes tree-flash-row {
+  0%, 55% { background: var(--gold-soft); }
+}
+@keyframes tree-hint {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tree-canvas { will-change: auto; }
+  .tree-hint { animation-name: none !important; }
+  .tree-card.is-flash { box-shadow: 0 0 0 5px var(--gold), var(--shadow-lg); }
+  .tree-row.is-flash { background: var(--gold-soft); }
+}
+@media print {
+  .tree-toolbar, .tree-zoom, .tree-hint, .tree-toggle, .tree-pop { display: none !important; }
+  .tree-viewport { block-size: auto; min-block-size: 80vh; border: 0; background: none; }
+}

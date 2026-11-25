@@ -1,0 +1,57 @@
+# Family tree — check a proposal (docs/SPEC.md §6.2 in the portal folder).
+# Runs when an issue is opened, edited or reopened: re-fetches the issue through the REST API, dry-runs its proposal
+# against data/family.json and writes ONE bot comment (updated in place) with the exact approval commands.
+# Untrusted text (issue title/body, comments) is never put into `run:`; the script reads $GITHUB_EVENT_PATH and the API.
+#
+# PORTAL_DIR is the folder that holds index.html, data/ and scripts/. If the portal moves to the root of its own
+# repository, change it to "." (one place per workflow).
+name: "Family tree · check proposal"
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number to check again"
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  PORTAL_DIR: family-tree
+
+concurrency:
+  group: family-tree-check-${{ github.event.issue.number || inputs.issue }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # Skip unrelated issues cheaply: only issues that carry a change code or the family-tree label.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.issue.labels.*.name, 'family-tree') ||
+      contains(github.event.issue.body, 'GFT1:') ||
+      contains(github.event.issue.body, 'GFT0:') ||
+      contains(github.event.issue.body, 'gft-proposal')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Check the proposal and update the bot comment
+        working-directory: ${{ env.PORTAL_DIR }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-proposal.mjs

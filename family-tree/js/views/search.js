@@ -9,6 +9,9 @@ import { personRow, nameOf } from '../ui.js';
 import { findRelationship, relationLabel } from '../core/kinship.js';
 import { plural } from './home.js';
 
+/** Element.append without the "null" text nodes it would create for skipped (null/false) children. */
+const add = (el, ...kids) => el.append(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
+
 register({
   en: {
     'search.title': 'Search',
@@ -126,7 +129,7 @@ function render(root, query) {
     results.replaceChildren();
     if (!text) {
       const ex = examples(graph);
-      results.append(h('section', { class: 'card search-tips', attrs: { 'aria-labelledby': 'search-tips-title' } },
+      add(results, h('section', { class: 'card search-tips', attrs: { 'aria-labelledby': 'search-tips-title' } },
         h('h2', { id: 'search-tips-title', class: 'search-tips-title' }, icon('info', { size: 20 }), t('search.tipsTitle')),
         h('ul', { class: 'search-tips-list' },
           h('li', null, t('search.tip1')),
@@ -141,13 +144,13 @@ function render(root, query) {
       return;
     }
     if (text.length < 2 && !graph.person(text)) {
-      results.append(h('p', { class: 'muted search-short' }, t('search.short')));
+      add(results, h('p', { class: 'muted search-short' }, t('search.short')));
       return;
     }
     let found = [];
     try { found = graph.search(text, { limit: LIMIT }) || []; } catch { found = []; }
     if (!found.length) {
-      results.append(h('div', { class: 'card search-none' },
+      add(results, h('div', { class: 'card search-none' },
         h('div', { class: 'empty-state' },
           h('h2', null, t('search.noneTitle'), lang() === 'ar' ? '' : ' ', h('bdi', null, lang() === 'ar' ? `«${text}»` : `“${text}”`)),
           h('p', { class: 'muted' }, t('search.noneText')),
@@ -155,7 +158,7 @@ function render(root, query) {
       return;
     }
     const withRel = found.length <= 30;
-    results.append(
+    add(results, 
       h('p', { class: 'search-count muted small' }, plural('search.n', found.length)),
       h('ul', { class: 'list search-list' }, found.map(({ person }) => h('li', null,
         personRow(person, {
@@ -186,7 +189,7 @@ function render(root, query) {
     }
   });
 
-  root.append(
+  add(root, 
     h('header', { class: 'page-head search-head' },
       h('h1', null, t('search.heading')),
       h('p', { class: 'lead' }, t('search.lead'))),

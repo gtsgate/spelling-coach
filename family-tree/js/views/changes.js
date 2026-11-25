@@ -7,6 +7,9 @@ import { store } from '../store.js';
 import { personChip, ownerName, spinner } from '../ui.js';
 import { formatDate } from '../core/dates.js';
 
+/** Element.append without the "null" text nodes it would create for skipped (null/false) children. */
+const add = (el, ...kids) => el.append(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
+
 register({
   en: {
     'changes.title': 'Updates',
@@ -45,6 +48,25 @@ register({
     'changes.untitled': 'تعديلات على الشجرة',
   },
 });
+
+register({
+  en: Object.fromEntries(['zero', 'one', 'two', 'few', 'many', 'other'].map((c) => [`changes.n.${c}`, c === 'one' ? '{n} update' : '{n} updates'])),
+  ar: {
+    'changes.n.zero': 'لا تحديثات',
+    'changes.n.one': 'تحديث واحد',
+    'changes.n.two': 'تحديثان',
+    'changes.n.few': '{n} تحديثات',
+    'changes.n.many': '{n} تحديثاً',
+    'changes.n.other': '{n} تحديث',
+  },
+});
+
+/** "{n} updates" with the right plural form for the current language. */
+function countText(n) {
+  let cat = 'other';
+  try { cat = new Intl.PluralRules(lang() === 'ar' ? 'ar' : 'en').select(n); } catch { cat = 'other'; }
+  return t(`changes.n.${cat}`, { n });
+}
 
 const PAGE = 30;
 let shown = PAGE; // module state: how many entries are visible (kept across re-renders)
@@ -180,14 +202,14 @@ function render(root) {
     h('p', { class: 'lead' }, t('changes.lead', { owner: ownerName() })));
 
   if (!store.changelog) {
-    root.append(head, spinner());
+    add(root, head, spinner());
     store.loadChangelog().then(() => { if (root.isConnected) { root.replaceChildren(); render(root); } }).catch(() => {});
     return;
   }
 
   const entries = changelogEntries();
   if (!entries.length) {
-    root.append(head, h('div', { class: 'card changes-empty' },
+    add(root, head, h('div', { class: 'card changes-empty' },
       h('div', { class: 'empty-state' },
         h('h2', null, t('changes.emptyTitle')),
         h('p', { class: 'muted' }, t('changes.emptyText')),
@@ -201,8 +223,8 @@ function render(root) {
       g.label ? h('h2', { class: 'changes-month-title' }, g.label) : null,
       h('div', { class: 'changes-list' }, g.entries.map((e) => changeEntry(e))))));
 
-  root.append(head,
-    h('p', { class: 'changes-count muted small' }, t('changes.count', { n: entries.length })),
+  add(root, head,
+    h('p', { class: 'changes-count muted small' }, countText(entries.length)),
     timeline,
     entries.length > shown
       ? h('div', { class: 'changes-more-row' }, h('button', {

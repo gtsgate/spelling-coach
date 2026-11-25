@@ -1,0 +1,42 @@
+# Family tree — weekly data backup (docs/SPEC.md §6.7 in the portal folder).
+# Creates the release "data-YYYY-MM-DD" with family.json, changelog.json and applied.json attached and keeps the
+# latest 12 data releases. Data releases are never marked "latest".
+#
+# PORTAL_DIR is the folder that holds index.html, data/ and scripts/ ("." once the portal is its own repository).
+name: "Family tree · weekly backup"
+
+on:
+  schedule:
+    - cron: "41 2 * * 5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PORTAL_DIR: family-tree
+
+concurrency:
+  group: family-tree-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Create the data release
+        working-directory: ${{ env.PORTAL_DIR }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/backup.mjs

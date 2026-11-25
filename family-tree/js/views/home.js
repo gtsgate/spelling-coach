@@ -11,6 +11,9 @@ import { yearOf, formatDate } from '../core/dates.js';
 import { recentEntries, changeEntry } from './changes.js';
 import { relationSentence } from './relationship.js';
 
+/** Element.append without the "null" text nodes it would create for skipped (null/false) children. */
+const add = (el, ...kids) => el.append(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
+
 // Plural-aware strings: keys `<base>.<category>` for every Intl.PluralRules category, in both languages.
 const CATS = ['zero', 'one', 'two', 'few', 'many', 'other'];
 function pluralBundle(base, en, ar) {
@@ -400,7 +403,7 @@ function recentSection() {
 function render(root) {
   const recent = recentSection();
   recent.querySelector('.section-title h2')?.setAttribute('id', 'home-recent-title');
-  root.append(
+  add(root, 
     hero(),
     whoCard(),
     h('div', { class: 'home-grid' },

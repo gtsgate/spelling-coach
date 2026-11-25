@@ -9,6 +9,9 @@ import { personPicker } from '../forms/picker.js';
 import { describeProposal } from '../core/describe.js';
 import { helpList, openDialog, plural } from './home.js';
 
+/** Element.append without the "null" text nodes it would create for skipped (null/false) children. */
+const add = (el, ...kids) => el.append(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
+
 register({
   en: {
     'me.title': 'My page',
@@ -32,12 +35,13 @@ register({
     'me.proposalsTitle': 'My suggestions',
     'me.proposalsEmpty': 'No suggestions yet. Anything added or corrected in the tree appears here until it is approved.',
     'me.draftTitle': 'Not sent yet',
-    'me.draftText': '{n} changes are waiting on this device. They reach {owner} only once sent.',
+    'me.draftText': '{changes} waiting on this device. {owner} sees them only once they are sent.',
+    'me.approvedFallback': 'Your suggestion was approved and is now on the tree.',
     'me.draftOpen': 'Review & send',
     'me.status.sent': 'Sent — awaiting approval',
     'me.status.stale': 'No longer applies',
     'me.status.approved': 'Approved',
-    'me.staleHelp': 'The tree changed since this was sent, so it can no longer be applied as it is. It is hidden from the tree. {owner} may already have handled it — if not, it can be suggested again.',
+    'me.staleHelp': 'The tree changed since this was sent, so it can no longer be applied as it is and is hidden from the tree. Perhaps {owner} has already handled it; if not, it can be suggested again.',
     'me.sentOn': 'Sent {date}',
     'me.via': 'via {via}',
     'me.via.whatsapp': 'WhatsApp',
@@ -80,7 +84,7 @@ register({
     'me.notListed': 'لا يظهر اسمك في الشجرة؟',
     'me.addSelf': 'إضافة نفسك وعائلتك',
     'me.thisIsMe': 'هذا أنت',
-    'me.profile': 'فتح صفحتي في الشجرة',
+    'me.profile': 'فتح صفحتي',
     'me.tree': 'فرعي في الشجرة',
     'me.change': 'تغيير',
     'me.cancel': 'إلغاء',
@@ -93,7 +97,8 @@ register({
     'me.proposalsTitle': 'اقتراحاتي',
     'me.proposalsEmpty': 'لا توجد اقتراحات بعد. كل إضافة أو تصحيح في الشجرة يظهر هنا حتى تتمّ الموافقة عليه.',
     'me.draftTitle': 'لم يُرسل بعد',
-    'me.draftText': 'عدد التعديلات المحفوظة على هذا الجهاز: {n}. ولا تصل إلى {owner} إلا بعد إرسالها.',
+    'me.draftText': 'على هذا الجهاز {changes} بانتظار الإرسال، ولن يطّلع عليها {owner} إلا بعد إرسالها.',
+    'me.approvedFallback': 'تمّت الموافقة على اقتراحك، وأصبح ظاهراً في الشجرة.',
     'me.draftOpen': 'مراجعة وإرسال',
     'me.status.sent': 'أُرسل — بانتظار الموافقة',
     'me.status.stale': 'لم يعد قابلاً للتطبيق',
@@ -283,7 +288,7 @@ function proposalsSection(graph) {
     const issue = Number(a.issue ?? entry?.issue);
     items.push(proposalItem({
       status: 'approved',
-      title: lines[0] || (typeof entry?.title === 'string' ? entry.title.replace(/^[^\p{L}\p{N}]+/u, '') : ''),
+      title: lines[0] || (typeof entry?.title === 'string' ? entry.title.replace(/^[^\p{L}\p{N}]+/u, '') : '') || t('me.approvedFallback'),
       lines: lines.length > 1 ? lines : [],
       meta: [a.approvedAt ? t('me.approvedOn', { date: shortDate(a.approvedAt) }) : '', a.ops ? plural('me.n.changes', a.ops) : '', Number.isFinite(issue) && issue > 0 ? t('me.request', { n: issue }) : ''],
       onForget: async () => {
@@ -300,7 +305,7 @@ function proposalsSection(graph) {
     h('span', { class: 'me-draft-icon', attrs: { 'aria-hidden': 'true' } }, icon('edit', { size: 18 })),
     h('div', { class: 'me-draft-text' },
       h('strong', null, t('me.draftTitle')),
-      h('span', { class: 'small' }, t('me.draftText', { n, owner: ownerLabel }))),
+      h('span', { class: 'small' }, t('me.draftText', { changes: plural('me.n.changes', n), owner: ownerLabel }))),
     h('a', { class: 'btn btn-primary btn-sm', href: '#/draft' }, icon('send', { size: 16 }), t('me.draftOpen'))) : null;
 
   return h('section', { class: 'me-section me-proposals', attrs: { 'aria-labelledby': 'me-proposals-title' } },
@@ -390,7 +395,7 @@ function render(root) {
   const graph = store.working;
   const me = store.me ? graph.person(store.me) : null;
 
-  root.append(
+  add(root, 
     h('header', { class: 'page-head me-head' },
       h('h1', null, t('me.title')),
       h('p', { class: 'lead' }, t('me.lead'))),

@@ -1,0 +1,39 @@
+# Issue form used by the family-tree site ("Send through GitHub"). The site pre-fills it with
+#   ?template=family-tree-proposal.yml&title=…&code=…&submitter=…&note=…
+# so the field ids `code`, `submitter` and `note` must not change.
+name: "🌳 مقترح لشجرة العائلة · Family tree proposal"
+description: "إرسال تعديلات أُعدّت على موقع شجرة العائلة · Send changes prepared on the family tree site"
+title: "🌳 "
+labels: [family-tree]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **شكراً لمساهمتكم في شجرة العائلة!** يُرجى إبقاء رمز التعديلات كما هو دون تغيير. سيراجع المشرف المقترح قبل ظهوره على الموقع.
+        ⚠️ كل ما يُكتب هنا مرئي لأي شخص على الإنترنت ويبقى في سجل GitHub العام.
+
+        **Thank you for helping with the family tree!** Please keep the change code exactly as it is. The tree keeper reviews every proposal before it appears on the site.
+        ⚠️ Everything written here is public on the internet and stays in GitHub's public history.
+  - type: textarea
+    id: code
+    attributes:
+      label: "رمز التعديلات — لا تغيير فيه · Change code — do not edit"
+      description: "يبدأ الرمز بـ GFT1: أو GFT0: · The code starts with GFT1: or GFT0:"
+      placeholder: "GFT1:…"
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: submitter
+    attributes:
+      label: "اسمك وصلة القرابة (اختياري) · Your name and relation (optional)"
+      placeholder: "مثال: سارة — حفيدة محمد · e.g. Sara — granddaughter of Muhammad"
+    validations:
+      required: false
+  - type: textarea
+    id: note
+    attributes:
+      label: "ملاحظة للمشرف (اختيارية) · Note for the tree keeper (optional)"
+      description: "لا داعي لكتابة معلومات خاصة هنا؛ يمكن إرسالها عبر واتساب · No need for private details here; send those on WhatsApp"
+    validations:
+      required: false

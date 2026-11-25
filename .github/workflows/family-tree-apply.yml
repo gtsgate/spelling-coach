@@ -1,0 +1,72 @@
+# Family tree — the approval queue (docs/SPEC.md §6.3, §6.5 in the portal folder).
+# Approvals: the `approve` / `approve-deletion` label, or an approver's comment "/approve <fp>" (Arabic: /موافق).
+# Every run applies ALL verified approvals in one commit to data/*.json, pushes (retrying on conflicts), comments,
+# closes the issues, nudges GitHub Pages and refreshes the check comment of the other open proposals.
+# Also handles /reject and /undo. A schedule picks up anything a cancelled or failed run left behind.
+#
+# PORTAL_DIR is the folder that holds index.html, data/ and scripts/ ("." once the portal is its own repository).
+name: "Family tree · apply approved proposals"
+
+on:
+  issues:
+    types: [labeled, opened]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Only this issue number (optional)"
+        required: false
+        type: string
+      dry_run:
+        description: "Dry run: read only, write nothing"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+  pages: write
+
+env:
+  PORTAL_DIR: family-tree
+
+jobs:
+  apply:
+    # Only approvals, slash commands on issues (not pull requests), the schedule and manual runs start the job.
+    if: >-
+      (github.event_name == 'issues' && github.event.action == 'labeled' &&
+        (github.event.label.name == 'approve' || github.event.label.name == 'approve-deletion')) ||
+      (github.event_name == 'issues' && github.event.action == 'opened' &&
+        (contains(github.event.issue.labels.*.name, 'approve') || contains(github.event.issue.labels.*.name, 'approve-deletion'))) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request == null &&
+        startsWith(github.event.comment.body, '/')) ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    # One data writer at a time; queued runs wait instead of being cancelled (nothing is lost).
+    concurrency:
+      group: family-tree-data
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the default branch (full history, for /undo)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Apply approved proposals
+        working-directory: ${{ env.PORTAL_DIR }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GFT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+        run: node scripts/apply-proposal.mjs

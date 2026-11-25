@@ -208,7 +208,7 @@ export function isAdminMode() {
 // Small building blocks
 
 /** A labelled field: { el, setError(msg), control }. */
-function field({ label, control, hint = '', id = control?.id, className = '', labelTag = 'label' }) {
+export function field({ label, control, hint = '', id = control?.id, className = '', labelTag = 'label' }) {
   const errorEl = h('div', { class: 'field-error', id: `${id}-err`, attrs: { 'aria-live': 'polite' } });
   const hintEl = hint ? h('div', { class: 'field-hint', id: `${id}-hint` }, hint) : null;
   const labelEl = label ? h(labelTag, { class: 'field-label', for: labelTag === 'label' ? id : undefined, id: `${id}-label` }, label) : null;
@@ -251,7 +251,7 @@ export function segmentedChoice({ name = uid('seg'), options, value = '', label 
  * Arabic + English inputs side by side. English auto-fills from the Arabic while untouched.
  * value() → {ar, en} where en is '' when it equals the automatic spelling.
  */
-function bilingualInputs({ id, value = {}, kind = 'given', maxLength = LIMITS.name, placeholderAr = '', placeholderEn = '', describedBy = '' }) {
+export function bilingualInputs({ id, value = {}, kind = 'given', maxLength = LIMITS.name, placeholderAr = '', placeholderEn = '', describedBy = '' }) {
   const auto = (s) => transliterate(trim(s), { kind });
   const initialAr = trim(value.ar);
   const initialEn = trim(value.en);

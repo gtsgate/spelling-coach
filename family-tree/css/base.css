@@ -417,7 +417,7 @@ body.booting .app-header::after { display: none; }
 @media (hover: hover) { .draft-pill:hover { color: var(--pending); border-color: var(--pending); } }
 .me-link { color: var(--accent) !important; }
 
-.nav-toggle { display: none; }
+.app-header .nav-toggle { display: none; }
 .nav-toggle[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
 
 .main-nav {
@@ -609,7 +609,7 @@ body.has-draft-bar { --draftbar-h: 66px; }
   :root { --header-h: 58px; --tabbar-h: calc(64px + env(safe-area-inset-bottom)); }
   body.has-draft-bar { --draftbar-h: 74px; }
   .header-inner { gap: 2px; padding-inline: 4px 8px; }
-  .nav-toggle { display: inline-grid; }
+  .app-header .nav-toggle { display: inline-grid; }
   .brand { gap: 9px; padding-block: 6px; }
   .brand-mark { inline-size: 34px; block-size: 34px; }
   .brand-mark .icon { inline-size: 18px; block-size: 18px; }
@@ -690,7 +690,19 @@ body.has-draft-bar { --draftbar-h: 66px; }
   .lang-toggle { padding-inline: 0; inline-size: var(--tap); justify-content: center; border-color: transparent; background: transparent; }
   .lang-toggle > span { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .lang-toggle .icon { inline-size: 20px; block-size: 20px; }
-  .header-actions .btn-icon { inline-size: 42px; }
+  .header-actions .btn-icon { inline-size: 40px; }
+  .header-inner { padding-inline: 2px 6px; }
+  .brand { gap: 7px; }
+  .brand-mark { inline-size: 32px; block-size: 32px; }
+  .brand-title, :root[lang="ar"] .brand-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    font-size: .92rem;
+    line-height: 1.15;
+  }
+  :root[lang="ar"] .brand-title { line-height: 1.35; }
 }
 
 /* ==========================================================================

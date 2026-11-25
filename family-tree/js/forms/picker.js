@@ -33,7 +33,7 @@ register({
 let pickerSeq = 0;
 
 /** Family neighbourhood of `id` (ancestors, descendants, their spouses) for ranking. */
-function neighbourhood(graph, id) {
+export function neighbourhood(graph, id) {
   const near = new Set();
   if (!id || !graph.person(id)) return near;
   const add = (pid) => {
