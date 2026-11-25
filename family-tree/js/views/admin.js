@@ -266,7 +266,12 @@ function rerender() {
   if (lastRoot && lastRoot.isConnected) render(lastRoot);
 }
 
-const portal = () => store.config?.portalPath || 'family-tree';
+// Folder of the portal inside the repository ("" when the portal IS the repository root). Ends with "/" when set.
+const portalPrefix = () => {
+  const raw = store.config && 'portalPath' in store.config ? String(store.config.portalPath || '') : 'family-tree';
+  const p = raw.replace(/^[./]+|\/+$/g, '');
+  return p ? `${p}/` : '';
+};
 const branch = () => store.config?.repo?.branch || 'main';
 function dateText(iso) {
   if (!iso || typeof iso !== 'string') return '';
@@ -672,7 +677,7 @@ function photosCard() {
   const p = photo.person ? store.working.person(photo.person) : null;
   const file = p ? `${p.id}.jpg` : '<id>.jpg';
   const path = `photos/${file}`;
-  const uploadUrl = store.repoUrl(`/upload/${branch()}/${portal()}/data/photos`);
+  const uploadUrl = store.repoUrl(`/upload/${branch()}/${portalPrefix()}data/photos`);
   const fileInput = h('input', {
     id: 'admin-photo-file', class: 'input admin-file', type: 'file', accept: 'image/*', disabled: !p,
     on: { change: (e) => { const f = e.target.files && e.target.files[0]; if (f) preparePhoto(f); } },
@@ -728,8 +733,8 @@ function dataCard() {
       h('p', { class: 'small muted' }, t('admin.data.downloadHint', { rev: store.data?.meta?.revision ?? 0, n: Object.keys(store.data?.people || {}).length }))),
     h('h3', { class: 'admin-sub' }, t('admin.data.links')),
     h('ul', { class: 'sheet-list admin-links' },
-      link(store.repoUrl(`/blob/${branch()}/${portal()}/docs/OWNER-GUIDE.md`), 'admin.link.guide', 'info'),
-      link(store.repoUrl(`/edit/${branch()}/${portal()}/config.json`), 'admin.link.config', 'edit'),
+      link(store.repoUrl(`/blob/${branch()}/${portalPrefix()}docs/OWNER-GUIDE.md`), 'admin.link.guide', 'info'),
+      link(store.repoUrl(`/edit/${branch()}/${portalPrefix()}config.json`), 'admin.link.config', 'edit'),
       link(store.repoUrl('/settings'), 'admin.link.settings', 'star'),
       link(store.repoUrl('/issues?q=label%3Afamily-tree'), 'admin.link.requests', 'github'),
       link(store.repoUrl('/actions'), 'admin.link.actions', 'restore'),
