@@ -17,13 +17,13 @@ import { personRow } from '../ui.js';
 
 register({
   en: {
-    'picker.placeholder': 'Type a name in Arabic or English…',
+    'picker.placeholder': 'Name in Arabic or English…',
     'picker.noResults': 'No one found with that name.',
     'picker.hint': 'Type at least 2 letters',
     'picker.results': '{n} results',
   },
   ar: {
-    'picker.placeholder': 'البحث بالاسم بالعربية أو الإنجليزية…',
+    'picker.placeholder': 'الاسم بالعربية أو الإنجليزية…',
     'picker.noResults': 'لا يوجد أحد بهذا الاسم.',
     'picker.hint': 'يكفي حرفان أو أكثر',
     'picker.results': '{n} نتيجة',

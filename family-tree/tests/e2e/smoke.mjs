@@ -227,11 +227,14 @@ async function routeSweep(browser) {
     for (const [width, height] of [[360, 740], [1280, 800]]) {
       for (const theme of QUICK ? ['light'] : ['light', 'dark']) combos.push({ lang, width, height, theme });
     }
+    // Largest text size (A++) on a phone: the most likely place for overflow.
+    combos.push({ lang, width: 360, height: 740, theme: 'light', textSize: 'xl' });
   }
   for (const combo of combos) {
-    const tag = `${combo.lang}-${combo.width}-${combo.theme}`;
+    const tag = `${combo.lang}-${combo.width}-${combo.theme}${combo.textSize ? `-${combo.textSize}` : ''}`;
     console.log(`• routes ${tag}`);
-    const context = await newContext(browser, { ...combo, storage: { 'gft.me': LEAF } });
+    const storage = { 'gft.me': JSON.stringify(LEAF), ...(combo.textSize ? { 'gft.textSize': combo.textSize } : {}) };
+    const context = await newContext(browser, { ...combo, storage });
     const page = await context.newPage();
     const problems = watch(page);
     for (const [name, hash] of routes) {
@@ -249,6 +252,7 @@ async function routeSweep(browser) {
         lang: document.documentElement.lang,
         dir: document.documentElement.dir,
         theme: document.documentElement.dataset.theme,
+        me: globalThis.__gft?.me || null,
         title: document.title,
         textLen: (document.querySelector('#app')?.innerText || '').trim().length,
         rawKeys: [...(document.querySelector('#app')?.innerText || '').matchAll(/\b[a-z]+\.[a-zA-Z]+(?:\.[a-zA-Z0-9]+)+\b/g)].map((m) => m[0]).filter((s) => !/^(gtsgate|github|wa|api)\./.test(s) && !/\.(com|io|me|json|js|html|jpg|png)$/.test(s)),
@@ -257,6 +261,7 @@ async function routeSweep(browser) {
       check(!state.notFound, where, 'not-found rendered');
       check(state.lang === combo.lang && state.dir === (combo.lang === 'ar' ? 'rtl' : 'ltr'), where, `html lang/dir is ${state.lang}/${state.dir}`);
       check(state.theme === combo.theme, where, `theme is ${state.theme}`);
+      check(state.me === LEAF, where, `"me" is ${state.me}, expected ${LEAF}`);
       check(state.textLen > 20, where, 'page looks empty');
       check(!state.rawKeys.length, where, `raw i18n keys visible: ${state.rawKeys.slice(0, 5).join(', ')}`);
       if (combo.width === 360) {

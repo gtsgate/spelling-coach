@@ -33,6 +33,7 @@ A bilingual (Arabic / English) family-tree portal: anyone can browse it without 
 cd family-tree
 python3 -m http.server 8080        # then open http://localhost:8080/
 node --test                        # all tests (Node ≥ 20; CI uses 22)
+node tests/e2e/smoke.mjs           # local browser smoke test (needs Playwright + Chromium; serves itself on :8199)
 node scripts/validate-data.mjs     # check data/family.json and the ledgers
 node scripts/apply-proposal.mjs --dry-run --event scripts/fixtures/approve-comment.json   # try the bot offline
 ```

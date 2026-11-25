@@ -208,6 +208,20 @@ function call(fn, ...args) {
 // ---------------------------------------------------------------------------------------------------------
 // Pieces
 
+/**
+ * Free text written in both languages in one string ("… التفاصيل. Added from the full name …") → one paragraph per
+ * language, the current language first, so mixed-direction text never wraps into a jumbled bidi line.
+ */
+function bilingualParts(text) {
+  const s = String(text || '').trim();
+  if (!s) return [];
+  const m = /^([\s\S]*[\u0600-\u06FF][^A-Za-z]*?)(?:\s+[—–-]\s+|\s+)([A-Za-z][^\u0600-\u06FF]*)$/.exec(s);
+  if (!m) return [s];
+  const ar = m[1].trim();
+  const en = m[2].trim();
+  return lang() === 'ar' ? [ar, en] : [en, ar];
+}
+
 function sectionCard(key, iconName, title, count, ...content) {
   return h('section', { class: ['card', 'person-sec', `person-sec-${key}`], attrs: { 'aria-labelledby': `psec-${key}` } },
     h('h2', { class: 'person-sec-title', id: `psec-${key}` },
@@ -457,7 +471,7 @@ function detailsSection(P) {
     extras.push(h('div', { class: 'notice notice-warning person-needs' }, icon('info'),
       h('div', null,
         h('p', { class: 'person-needs-title' }, t('person.needsInfo')),
-        P.needsInfo ? h('p', { class: 'small', dir: 'auto' }, P.needsInfo) : null,
+        ...bilingualParts(P.needsInfo).map((part, i) => h('p', { class: ['small', i ? 'muted' : ''], dir: 'auto' }, part)),
         h('button', { type: 'button', class: 'btn btn-sm', on: { click: () => call(openEditPerson, P.id) } }, icon('edit', { size: 16 }), t('person.iKnow')))));
   }
   const dup = P.duplicateOf ? graph.person(P.duplicateOf) : null;
