@@ -12,6 +12,7 @@
 // Parentage is blood only: ties (milk / foster) never count as parents, ancestors or descendants.
 
 import { lineageName, fullName, searchKey, skeletonKey, tokenSkeletonVariants } from './names.js';
+import { englishOf } from './translit.js';
 
 // ---------------------------------------------------------------------------------------------------------
 // Date helpers (local, so graph.js does not depend on dates.js)
@@ -540,14 +541,32 @@ export function buildGraph(data, { includeRemoved = false } = {}) {
     }
     return out;
   }
-  const knownName = (p, l) => (p && (p.nameStatus || 'known') === 'known' ? (p.name?.[l] || '').trim() : '');
-  const kunya = (p, l) => (p && (p.nameStatus || 'known') === 'known' ? (p.nickname?.[l] || '').trim() : '');
+  // Text variants of a bilingual field for the index: Arabic, typed English, and the automatic English of the
+  // Arabic (translit.js), so "Muhammad", "Mohamed" and "محمد" all reach the same person.
+  const autoMemo = new Map();
+  const autoEn = (ar, kind) => {
+    const k = `${kind}|${ar}`;
+    if (!autoMemo.has(k)) {
+      let v = '';
+      try { v = String(englishOf({ ar, en: '' }, kind) || ''); } catch { v = ''; }
+      autoMemo.set(k, v);
+    }
+    return autoMemo.get(k);
+  };
+  const fieldTexts = (field, kind = 'given') => {
+    const ar = typeof field?.ar === 'string' ? field.ar.trim() : '';
+    const en = typeof field?.en === 'string' ? field.en.trim() : '';
+    return [ar, en, ar ? autoEn(ar, kind) : ''];
+  };
+  const isKnown = (p) => !!p && (p.nameStatus || 'known') === 'known';
+  const nameTexts = (p) => (isKnown(p) ? fieldTexts(p.name) : []);
+  const hasText = (f) => !!((f?.ar || '').trim() || (f?.en || '').trim());
 
   let searchIndex = null;
   function buildSearchIndex() {
     searchIndex = [];
     for (const p of visiblePeople) {
-      const slots = [makeAlts(knownName(p, 'ar'), knownName(p, 'en'))];
+      const slots = [makeAlts(...nameTexts(p))];
       // Paternal chain (male fathers only), stopping at an unnamed father.
       let cur = p;
       const seen = new Set([p.id]);
@@ -555,19 +574,20 @@ export function buildGraph(data, { includeRemoved = false } = {}) {
         const f = parentOfGender(cur.id, 'm');
         if (!f || seen.has(f.id)) break;
         seen.add(f.id);
-        const alts = makeAlts(knownName(f, 'ar') || kunya(f, 'ar'), knownName(f, 'en') || kunya(f, 'en'));
+        // a kunya-only father contributes his kunya, as in lineageName
+        const alts = makeAlts(...(isKnown(f) && hasText(f.name) ? fieldTexts(f.name) : isKnown(f) ? fieldTexts(f.nickname) : []));
         if (!alts.length) break;
         slots.push(alts);
         cur = f;
       }
       // Inherited surname: first non-empty surname along the paternal chain.
       let inherited = [];
-      if (!(p.surname?.ar || p.surname?.en)) {
+      if (!hasText(p.surname)) {
         const seen2 = new Set([p.id]);
         let c = parentOfGender(p.id, 'm');
         while (c && !seen2.has(c.id)) {
           seen2.add(c.id);
-          if (c.surname?.ar || c.surname?.en) { inherited = makeAlts(c.surname.ar, c.surname.en); break; }
+          if (hasText(c.surname)) { inherited = makeAlts(...fieldTexts(c.surname, 'surname')); break; }
           c = parentOfGender(c.id, 'm');
         }
       }
@@ -575,8 +595,8 @@ export function buildGraph(data, { includeRemoved = false } = {}) {
         p,
         ord: order.get(p.id),
         slots,
-        nick: makeAlts(p.nickname?.ar, p.nickname?.en),
-        sur: makeAlts(p.surname?.ar, p.surname?.en),
+        nick: makeAlts(...fieldTexts(p.nickname)),
+        sur: makeAlts(...fieldTexts(p.surname, 'surname')),
         inherited,
       });
     }
@@ -707,20 +727,31 @@ export function buildGraph(data, { includeRemoved = false } = {}) {
   }
 
   // --- duplicates -----------------------------------------------------------------------------------
+  const keyMemo = new Map();
+  const memoKey = (s) => {
+    let k = keyMemo.get(s);
+    if (k === undefined) { k = searchKey(s); keyMemo.set(s, k); }
+    return k;
+  };
+  const MAX_SUSPECTS = 1000;
+
   /**
-   * Pairs of active people that may be the same human: [[a, b, reason]] with reason one of
+   * Pairs of active people that may be the same human: [[a, b, reason]] (a before b in the data), reason one of
    *   "marked"            — duplicateOf already points from one to the other
    *   "same-parents"      — same name, same birth union
    *   "same-father" / "same-mother" — same name, same father / mother (different unions)
    *   "same-spouse"       — same name, married to the same person
-   *   "same-lineage"      — same name, father's and grandfather's names identical
+   *   "same-lineage"      — same name, father's and grandfather's names identical (different records)
    *   "same-surname-year" — same name and surname, birth years within 2
-   * "Same name" = equal normalized given name (Arabic or English) or, across languages, equal skeleton.
+   * "Same name" = equal normalized given name in Arabic or in (typed) English, or — when one of them lacks a
+   * language — equal skeleton. People of different known genders are never paired. Capped at 1,000 pairs.
+   * People are bucketed by (name, relation) so this stays fast on large trees.
    */
   function duplicatesSuspects() {
     const pairs = new Map();
     const addPair = (a, b, reason) => {
-      if (!a || !b || a === b) return;
+      if (!a || !b || a === b || pairs.size >= MAX_SUSPECTS) return;
+      if (a.gender && b.gender && a.gender !== b.gender) return;
       const [x, y] = order.get(a.id) <= order.get(b.id) ? [a, b] : [b, a];
       const k = `${x.id}|${y.id}`;
       if (!pairs.has(k)) pairs.set(k, [x, y, reason]);
@@ -730,62 +761,75 @@ export function buildGraph(data, { includeRemoved = false } = {}) {
       const other = p.duplicateOf ? byId.get(p.duplicateOf) : null;
       if (other && !other.removed) addPair(p, other, 'marked');
     }
-    const groups = new Map();
-    const put = (k, p) => { if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); };
-    for (const p of active) {
-      const ar = knownName(p, 'ar');
-      const en = knownName(p, 'en');
-      if (ar) put(`a:${searchKey(ar)}`, p);
-      if (en) put(`e:${searchKey(en)}`, p);
-      if (!ar || !en) {
-        const sk = skeletonKey(ar || en);
-        if (sk) put(`s:${sk}`, p);
-      }
-    }
-    const nameAt = (p, l) => searchKey(knownName(p, l));
+    const typed = (p, l) => (p && (p.nameStatus || 'known') === 'known' && typeof p.name?.[l] === 'string' ? p.name[l].trim() : '');
+    const nameKeys = (p) => {
+      const ar = typed(p, 'ar');
+      const en = typed(p, 'en');
+      const keys = [];
+      if (ar) keys.push(`a:${memoKey(ar)}`);
+      if (en) keys.push(`e:${memoKey(en)}`);
+      if ((ar || en) && !(ar && en)) keys.push(`s:${skeletonKey(ar || en)}`);
+      return keys;
+    };
     const sameName = (a, b) => {
       for (const l of ['ar', 'en']) {
-        const x = nameAt(a, l);
-        const y = nameAt(b, l);
-        if (x && y) return x === y;
+        const x = typed(a, l);
+        const y = typed(b, l);
+        if (x && y) return memoKey(x) === memoKey(y);
       }
-      return skeletonKey(knownName(a, 'ar') || knownName(a, 'en')) === skeletonKey(knownName(b, 'ar') || knownName(b, 'en'));
+      return skeletonKey(typed(a, 'ar') || typed(a, 'en')) === skeletonKey(typed(b, 'ar') || typed(b, 'en'));
     };
-    const fatherName = (p) => {
+    const firstName = (p) => (p ? memoKey(typed(p, 'ar') || typed(p, 'en')) : '');
+    // Buckets per reason, in priority order (a pair keeps its first reason).
+    const REASONS = ['same-parents', 'same-father', 'same-mother', 'same-spouse', 'same-lineage', 'same-surname-year'];
+    const buckets = new Map(REASONS.map((r) => [r, new Map()]));
+    const put = (reason, key, p) => {
+      const m = buckets.get(reason);
+      if (!m.has(key)) m.set(key, []);
+      m.get(key).push(p);
+    };
+    for (const p of active) {
+      const keys = nameKeys(p);
+      if (!keys.length) continue;
+      const b = birthOf.get(p.id);
       const f = parentOfGender(p.id, 'm');
-      return f ? searchKey(knownName(f, 'ar') || knownName(f, 'en')) : '';
-    };
-    for (const [key, list] of groups) {
-      if (list.length < 2) continue;
-      for (let i = 0; i < list.length; i++) {
-        for (let j = i + 1; j < list.length; j++) {
-          const a = list[i];
-          const b = list[j];
-          if (a.gender && b.gender && a.gender !== b.gender) continue;
-          if (key.startsWith('s:') && !sameName(a, b)) continue;
-          const ba = birthOf.get(a.id);
-          const bb = birthOf.get(b.id);
-          if (ba && ba === bb) { addPair(a, b, 'same-parents'); continue; }
-          const fa = parentOfGender(a.id, 'm');
-          const fb = parentOfGender(b.id, 'm');
-          if (fa && fa === fb) { addPair(a, b, 'same-father'); continue; }
-          const ma = parentOfGender(a.id, 'f');
-          const mb = parentOfGender(b.id, 'f');
-          if (ma && ma === mb) { addPair(a, b, 'same-mother'); continue; }
-          const sa = new Set(spouses(a.id).map((s) => s.person.id));
-          if (spouses(b.id).some((s) => sa.has(s.person.id))) { addPair(a, b, 'same-spouse'); continue; }
-          if (fa && fb) {
-            const ga = parentOfGender(fa.id, 'm');
-            const gb = parentOfGender(fb.id, 'm');
-            if (ga && gb && fatherName(a) && fatherName(a) === fatherName(b) && fatherName(fa) && fatherName(fa) === fatherName(fb)) {
-              addPair(a, b, 'same-lineage');
-              continue;
+      const m = parentOfGender(p.id, 'f');
+      const gf = f ? parentOfGender(f.id, 'm') : null;
+      const sp = spouses(p.id).map((s) => s.person.id);
+      const sur = memoKey(p.surname?.ar || '') || memoKey(p.surname?.en || '');
+      const year = birthYear(p);
+      for (const k of keys) {
+        if (b) put('same-parents', `${k}|${uid(b)}`, p);
+        if (f) put('same-father', `${k}|${f.id}`, p);
+        if (m) put('same-mother', `${k}|${m.id}`, p);
+        for (const s of sp) put('same-spouse', `${k}|${s}`, p);
+        if (f && gf && firstName(f) && firstName(gf)) put('same-lineage', `${k}|${firstName(f)}|${firstName(gf)}`, p);
+        if (sur && year !== null) put('same-surname-year', `${k}|${sur}`, p);
+      }
+    }
+    for (const reason of REASONS) {
+      for (const [key, list] of buckets.get(reason)) {
+        if (list.length < 2) continue;
+        const fuzzy = key.startsWith('s:');
+        if (reason === 'same-surname-year') {
+          // sliding window over birth years (±2)
+          const sorted = list.slice().sort((x, y) => birthYear(x) - birthYear(y));
+          for (let i = 0; i < sorted.length; i++) {
+            for (let j = i + 1; j < sorted.length && birthYear(sorted[j]) - birthYear(sorted[i]) <= 2; j++) {
+              if (!fuzzy || sameName(sorted[i], sorted[j])) addPair(sorted[i], sorted[j], reason);
             }
           }
-          const sur = (p) => searchKey(p.surname?.ar || '') || searchKey(p.surname?.en || '');
-          const ya = birthYear(a);
-          const yb = birthYear(b);
-          if (sur(a) && sur(a) === sur(b) && ya !== null && yb !== null && Math.abs(ya - yb) <= 2) addPair(a, b, 'same-surname-year');
+          continue;
+        }
+        for (let i = 0; i < list.length; i++) {
+          for (let j = i + 1; j < list.length; j++) {
+            const a = list[i];
+            const c = list[j];
+            if (fuzzy && !sameName(a, c)) continue;
+            // "same lineage" is only interesting for different records of the father
+            if (reason === 'same-lineage' && parentOfGender(a.id, 'm') === parentOfGender(c.id, 'm')) continue;
+            addPair(a, c, reason);
+          }
         }
       }
     }

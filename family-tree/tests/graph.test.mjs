@@ -364,7 +364,7 @@ describe('branches', () => {
     assert.equal(br[0].person.id, 'pf');
     assert.equal(br[0].partner.id, 'pw1');
     assert.deepEqual(br[0].label, { ar: 'أحمد الحربي وسارة', en: 'Ahmed Al-Harbi & Sarah' });
-    assert.equal(br[0].count, 6); // pa1 pa2 pa3 pb1 pg1 pc… (pb1 via ub) + pg1
+    assert.equal(br[0].count, 5); // pa1 pa2 pa3, pb1 (via ub) and the grandson pg1
     assert.equal(br[1].person.id, 'pip1');
     assert.equal(br[1].partner.id, 'pip2');
     // Noura married in: her parents' branch is listed, she is not.
@@ -588,7 +588,7 @@ describe('real data', () => {
     assert.deepEqual(br.map((x) => x.person.id), [salem.id, head2.id]);
     for (const x of br) assert.equal(x.person.gender, 'm');
     assert.deepEqual(br[0].label, { ar: 'سالم عالم', en: 'Salem Alem' });
-    assert.deepEqual(br[1].label, { ar: 'محمد علي محمود', en: 'Mohammed Ali Mahmoud' });
+    assert.deepEqual(br[1].label, { ar: 'محمد علي محمود', en: 'Muhammad Ali Mahmoud' }); // automatic English
     assert.ok(br.every((x) => x.count > 40));
   });
 
@@ -616,6 +616,15 @@ describe('real data', () => {
     assert.equal(g.search('عبد الرحمن')[0].person.name.ar, 'عبدالرحمن');
     assert.equal(g.search('قنديل')[0].person.name.ar, 'إحسان');
     assert.equal(g.search('Bibi')[0].person.nickname.ar, 'بيبي');
+  });
+
+  test('Arabic-only names are searchable by their automatic English spelling', () => {
+    const r = g.search('Muhammad');
+    assert.ok(r[0].score >= 4000, 'exact match on the automatic English');
+    assert.equal(r[0].person.name.ar, 'محمد');
+    assert.equal(r[0].person.name.en, '');
+    assert.equal(g.search('Muhammad Ali Mahmoud')[0].person.id, head2.id);
+    assert.equal(g.search('Daghestani')[0].person.surname.ar, 'داغستاني');
   });
 
   test('children of علي and فايزة descend from both families', () => {
@@ -652,7 +661,7 @@ describe('real data', () => {
   test('head of family 2: unions follow spouseOrder', () => {
     assert.deepEqual(g.unionsOf(head2.id).map((u) => u.id), head2.spouseOrder);
     assert.equal(g.spouses(head2.id).length, 5);
-    assert.equal(g.children(head2.id).length, 11);
+    assert.equal(g.children(head2.id).length, 10);
   });
 
   test('duplicatesSuspects and recentlyAdded run on the real data', () => {

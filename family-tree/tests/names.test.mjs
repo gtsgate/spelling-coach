@@ -87,12 +87,21 @@ afterEach(() => setLineageStyle('plain'));
 // ---------------------------------------------------------------------------------------------------------
 
 describe('personName', () => {
-  test('given name with fallback to the other language', () => {
+  test('English: typed English, else automatic spelling of the Arabic; Arabic falls back to English', () => {
     const p = fullPerson({ id: 'pa1', name: { ar: 'أحمد', en: '' } });
     assert.equal(personName(p, 'ar'), 'أحمد');
-    assert.equal(personName(p, 'en'), 'أحمد');
+    assert.equal(personName(p, 'en'), 'Ahmed');
+    assert.equal(personName(fullPerson({ id: 'pa7', name: { ar: 'محمد', en: '' } }), 'en'), 'Muhammad');
+    assert.equal(personName(fullPerson({ id: 'pa8', name: { ar: 'محمد', en: 'Mohamed' } }), 'en'), 'Mohamed');
     const q = fullPerson({ id: 'pa2', name: { ar: '', en: 'Ahmed' } });
     assert.equal(personName(q, 'ar'), 'Ahmed');
+  });
+  test('auto English everywhere a name is shown in English', () => {
+    const p = fullPerson({ id: 'pa9', name: { ar: 'خديجة' }, nickname: { ar: 'بيبي' }, surname: { ar: 'آل غالب' } });
+    assert.equal(displayName(p, 'en'), 'Khadija (Bibi)');
+    assert.equal(fullName(p, 'en'), 'Khadija Al Ghalib (Bibi)');
+    assert.equal(fullName(p, 'ar'), 'خديجة آل غالب (بيبي)');
+    assert.equal(initials(p, 'en'), 'KG');
   });
   test('never shows a withheld or unknown name, even if present in data', () => {
     assert.equal(personName(fullPerson({ id: 'pa3', nameStatus: 'withheld', name: { ar: 'سرّ' } }), 'ar'), '');
@@ -100,7 +109,7 @@ describe('personName', () => {
     assert.equal(personName(null, 'ar'), '');
   });
   test('works on compact people (missing fields)', () => {
-    assert.equal(personName({ id: 'pa5', name: { ar: 'علي' } }, 'en'), 'علي');
+    assert.equal(personName({ id: 'pa5', name: { ar: 'علي' } }, 'en'), 'Ali');
     assert.equal(displayName({ id: 'pa6' }, 'ar'), 'غير معروف');
   });
 });
@@ -268,9 +277,10 @@ describe('lineageName', () => {
     const moh = rg.people().find((p) => p.name.ar === 'محمد' && rg.father(p.id)?.name.ar === 'حسن' && rg.father(rg.father(p.id).id)?.name.ar === 'سالم');
     assert.ok(moh);
     assert.equal(lineageName(rg, moh.id, 'ar'), 'محمد حسن سالم عالم');
-    assert.equal(lineageName(rg, moh.id, 'en'), 'Mohammed Hassan Salem Alem');
+    // English is the automatic spelling (the owner chose "Muhammad" for محمد)
+    assert.equal(lineageName(rg, moh.id, 'en'), 'Muhammad Hassan Salem Alem');
     assert.equal(lineageName(rg, moh.id, 'ar', { style: 'bin' }), 'محمد بن حسن بن سالم عالم');
-    assert.equal(lineageName(rg, moh.id, 'en', { style: 'bin' }), 'Mohammed bin Hassan bin Salem Alem');
+    assert.equal(lineageName(rg, moh.id, 'en', { style: 'bin' }), 'Muhammad bin Hassan bin Salem Alem');
   });
   test('cycle-safe on bad data', () => {
     const c = builder();
@@ -408,7 +418,7 @@ describe('real data labels', () => {
     }
     const dagh = unknown.find((p) => p.surname.ar === 'داغستاني');
     assert.equal(displayName(dagh, 'ar', g), 'زوجة محمد علي محمود (داغستاني)');
-    assert.equal(displayName(dagh, 'en', g), 'Wife of Mohammed Ali Mahmoud (Daghestani)');
+    assert.equal(displayName(dagh, 'en', g), 'Wife of Muhammad Ali Mahmoud (Daghestani)');
     const alem = unknown.find((p) => p.surname.ar === 'عالم');
     assert.equal(displayName(alem, 'ar', g), 'زوج علوية مراد (عالم)');
     const kids = unknown.filter((p) => !p.gender).map((p) => displayName(p, 'ar', g)).sort();

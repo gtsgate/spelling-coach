@@ -9,24 +9,45 @@
 // The optional `graph` argument is a Graph from graph.js (buildGraph). Only these methods are used, each
 // through optional chaining so a partial graph works too: person(id), father(id), mother(id),
 // spouses(id) → [{person, union}], children(id).
+//
+// Auto English (§2.1): English text of a name / surname / nickname is the stored English when someone typed it,
+// else the automatic spelling of the Arabic (translit.js englishOf: محمد → Muhammad). Arabic text falls back to
+// the stored English when there is no Arabic.
+
+import { englishOf } from './translit.js';
 
 // ---------------------------------------------------------------------------------------------------------
 // Small helpers
-
-const OTHER_LANG = { ar: 'en', en: 'ar' };
 
 /** "ar" | "en" (anything else → "ar", the portal's default language). */
 function langOf(lang) {
   return lang === 'en' ? 'en' : 'ar';
 }
 
-/** Trimmed text of a bilingual field in `lang`, falling back to the other language. */
-function biText(obj, lang) {
+const autoEnglishMemo = new Map(); // `${kind}|${arabic}` → automatic English (names repeat a lot)
+
+/** Automatic English for Arabic text (memoized; never throws). */
+function autoEnglishOf(ar, kind) {
+  const key = `${kind}|${ar}`;
+  let v = autoEnglishMemo.get(key);
+  if (v === undefined) {
+    try { v = String(englishOf({ ar, en: '' }, kind) || '').trim(); } catch { v = ''; }
+    if (autoEnglishMemo.size > 20000) autoEnglishMemo.clear();
+    autoEnglishMemo.set(key, v);
+  }
+  return v || ar;
+}
+
+/**
+ * Trimmed text of a bilingual field in `lang`. English: stored English, else the automatic spelling of the
+ * Arabic (`kind` "given" | "surname"). Arabic: the Arabic, else the stored English.
+ */
+function biText(obj, lang, kind = 'given') {
   if (!obj || typeof obj !== 'object') return '';
-  const a = typeof obj[lang] === 'string' ? obj[lang].trim() : '';
-  if (a) return a;
-  const b = typeof obj[OTHER_LANG[lang]] === 'string' ? obj[OTHER_LANG[lang]].trim() : '';
-  return b;
+  const ar = typeof obj.ar === 'string' ? obj.ar.trim() : '';
+  const en = typeof obj.en === 'string' ? obj.en.trim() : '';
+  if (lang === 'en') return en || (ar ? autoEnglishOf(ar, kind) : '');
+  return ar || en;
 }
 
 function nameStatusOf(p) {
@@ -67,8 +88,9 @@ export function getLineageStyle() {
 // Person names
 
 /**
- * Given name (ism) in `lang`, falling back to the other language. Empty for unknown / withheld names
- * (a withheld name is never shown, even if one slipped into the data).
+ * Given name (ism) in `lang`: English = stored English or the automatic spelling of the Arabic; Arabic = the
+ * Arabic, else the stored English. Empty for unknown / withheld names (a withheld name is never shown, even
+ * if one slipped into the data).
  */
 export function personName(p, lang = 'ar') {
   if (!p || nameStatusOf(p) !== 'known') return '';
@@ -159,7 +181,7 @@ export function displayName(p, lang = 'ar', graph = null) {
   if (given) return nick && nick !== given ? `${given} (${nick})` : given;
   const status = nameStatusOf(p);
   if (status === 'known' && nick) return nick; // kunya-only ("أبو خالد")
-  const sur = biText(p.surname, L);
+  const sur = biText(p.surname, L, 'surname');
   if (nick) return sur ? `${nick} ${sur}` : nick;
   const label = relationalLabel(p, L, graph, status);
   // "(surname)" unless the label already ends with it ("والد غازي عالم", not "والد غازي عالم (عالم)").
@@ -176,7 +198,7 @@ export function fullName(p, lang = 'ar', graph = null) {
   const L = langOf(lang);
   const given = personName(p, L);
   const nick = biText(p.nickname, L);
-  const sur = biText(p.surname, L);
+  const sur = biText(p.surname, L, 'surname');
   if (given) {
     const base = sur ? `${given} ${sur}` : given;
     return nick && nick !== given ? `${base} (${nick})` : base;
@@ -197,7 +219,7 @@ function inheritedSurname(graph, p, lang) {
   let cur = p;
   while (cur && !seen.has(cur.id)) {
     seen.add(cur.id);
-    const s = biText(cur.surname, lang);
+    const s = biText(cur.surname, lang, 'surname');
     if (s) return s;
     cur = maleFather(graph, cur);
   }
@@ -263,7 +285,7 @@ export function initials(p, lang = 'ar') {
   if (/[؀-ۿ]/.test(f)) return f;
   const words = base.split(/[\s-]+/).filter(Boolean);
   let second = '';
-  const sur = biText(p.surname, L).replace(/^(?:al|el)[\s-]+/i, '');
+  const sur = biText(p.surname, L, 'surname').replace(/^(?:al|el)[\s-]+/i, '');
   if (sur && !/[؀-ۿ]/.test(sur)) second = firstLetter(sur);
   else if (words.length > 1) second = firstLetter(words[words.length - 1].replace(/^(?:al|el)-/i, ''));
   return (f + second).toUpperCase();
