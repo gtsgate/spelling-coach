@@ -3,17 +3,22 @@
   "portalPath": "family-tree",
   "siteUrl": "https://gtsgate.github.io/spelling-coach/family-tree/",
   "approvers": ["gtsgate"],
-  "labels": {
-    "proposal": "family-tree",
-    "approve": "approve",
-    "approveDeletion": "approve-deletion",
-    "needsChanges": "needs-changes",
-    "applied": "applied",
-    "deletion": "deletion-request"
+  "owner": {
+    "personId": "",
+    "name": { "ar": "مشرف الشجرة", "en": "the tree keeper" },
+    "welcome": {
+      "ar": "أهلاً بكم في شجرة عائلتنا. هذه مساحة نجمع فيها أسماء أهلنا وقصصهم، ليعرف بعضنا بعضاً وتبقى الذكرى للأجيال القادمة. كل إضافة منكم تُراجَع قبل أن تظهر، فلا تتردّدوا في إضافة فروعكم وتصحيح ما ترونه.",
+      "en": "Welcome to our family tree — a place to gather the names and stories of our people, so we can know one another and keep the memory for the generations to come. Every contribution is reviewed before it appears, so please add your branch and correct anything you see."
+    },
+    "whatsapp": "",
+    "email": ""
   },
-  "contact": { "whatsapp": "", "email": "" },
-  "relayUrl": "",
   "defaultLanguage": "ar",
   "arabicDigits": false,
-  "treeDefaultDepth": 3
+  "arabicMonthNames": "standard",
+  "primaryCalendar": "gregorian",
+  "lineageStyle": "plain",
+  "showDivorce": false,
+  "treeDefaultDepth": 3,
+  "privacyDefaults": { "femaleNameStatus": "known", "photos": "all" }
 }

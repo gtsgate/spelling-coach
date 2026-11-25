@@ -1,15 +1,20 @@
-// App state: configuration, canonical data, the visitor's draft proposal and the "working" graph
-// (data + draft applied in preview mode, so pending changes appear everywhere in the UI).
+// App state: configuration, canonical data, the visitor's draft proposal, proposals already sent
+// (awaiting approval) and the "working" graph = data + sent proposals + draft, applied in preview mode,
+// so pending changes appear everywhere in the UI.  See docs/SPEC.md §7.3.
 import { buildGraph } from './core/graph.js';
 import { applyProposal, newProposal, opRefs } from './core/ops.js';
-import { normalizeData } from './core/schema.js';
-import { setDigits } from './core/dates.js';
+import { normalizeData, newProposalId } from './core/schema.js';
+import { setDigits, setMonthNames } from './core/dates.js';
+import { setLineageStyle } from './core/names.js';
 import { setDefaultLang, setArabicDigits } from './i18n.js';
 
 const DRAFT_KEY = 'gft.draft.v1';
+const SENT_KEY = 'gft.sent.v1';
+const COUNTER_KEY = 'gft.counter.v1';
 const ME_KEY = 'gft.me';
+const DIGITS_KEY = 'gft.digits';
 
-const listeners = { draft: new Set(), data: new Set(), me: new Set() };
+const listeners = { draft: new Set(), sent: new Set(), data: new Set(), me: new Set() };
 
 function loadJSON(key) {
   try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : null; } catch { return null; }
@@ -21,53 +26,86 @@ function saveJSON(key, value) {
   } catch { /* storage full / unavailable */ }
 }
 
-function emptyDraft() {
-  return { ops: [], submitter: { name: '', relation: '', personId: '' }, note: '', counter: 0, updatedAt: '' };
+function emptyDraft(submitter) {
+  return {
+    id: newProposalId(),
+    ops: [],
+    submitter: { name: '', relation: '', personId: '', ...(submitter || {}) },
+    note: '',
+    dependsOn: [],
+    source: null, // {issue, hash} when the owner is correcting a proposal
+    updatedAt: '',
+  };
 }
 
+const PREVIEW = () => ({ mode: 'preview', now: new Date().toISOString(), allowDestructive: true });
+
 export const store = {
-  /** @type {object} config.json */
+  /** config.json */
   config: null,
   /** canonical normalized data (family.json) */
   data: null,
-  /** Graph of canonical data */
+  /** Graph of canonical data only */
   base: null,
-  /** Graph of data + draft (preview). Views should normally read from this. */
+  /** Graph of data + sent (unapproved) proposals + draft. Views normally read from this. */
   working: null,
-  /** Draft proposal being prepared by this visitor */
   draft: emptyDraft(),
-  /** ids touched / created by the draft (for "pending" badges) */
-  pending: { people: new Set(), unions: new Set(), created: new Set() },
-  /** Problems applying the current draft to the latest data (e.g. data changed since drafting) */
+  /** [{id, at, via, proposal}] proposals the visitor sent that are not yet approved */
+  sent: [],
+  /** ids of sent proposals that no longer apply to the latest data */
+  sentStale: new Set(),
+  /** Sent proposals that the changelog now lists as applied (filled on load; views may toast them) */
+  justApproved: [],
+  /** id sets for badges: draft-only vs sent-awaiting-approval */
+  pending: { draft: new Set(), sent: new Set(), created: new Set() },
   draftErrors: [],
   draftWarnings: [],
-  /** Map tempRef → op that declared it (for describing pending people) */
   changelog: null,
   me: null,
   ready: false,
 
   async init() {
-    const [config, data] = await Promise.all([
-      fetchJSON('config.json'),
-      fetchJSON('data/family.json'),
-    ]);
+    const [config, data] = await Promise.all([fetchJSON('config.json'), fetchJSON('data/family.json')]);
     this.config = config;
     setDefaultLang(config.defaultLanguage || 'ar');
-    setArabicDigits(!!config.arabicDigits);
-    try { setDigits(config.arabicDigits ? 'arab' : 'latn'); } catch { /* optional */ }
+    const digits = loadJSON(DIGITS_KEY);
+    this.setDigitsPref(digits === 'arab' || digits === 'latn' ? digits : (config.arabicDigits ? 'arab' : 'latn'), { silent: true });
+    try { setMonthNames(config.arabicMonthNames || 'standard'); } catch { /* optional */ }
+    try { setLineageStyle(config.lineageStyle || 'plain'); } catch { /* optional */ }
     this.setData(data, { silent: true });
-    const saved = loadJSON(DRAFT_KEY);
-    if (saved && Array.isArray(saved.ops)) this.draft = { ...emptyDraft(), ...saved, submitter: { ...emptyDraft().submitter, ...(saved.submitter || {}) } };
-    this.me = loadJSON(ME_KEY);
+
+    const savedDraft = loadJSON(DRAFT_KEY);
+    if (savedDraft && Array.isArray(savedDraft.ops)) {
+      this.draft = { ...emptyDraft(), ...savedDraft, submitter: { ...emptyDraft().submitter, ...(savedDraft.submitter || {}) } };
+      if (!this.draft.id) this.draft.id = newProposalId();
+      if (!Array.isArray(this.draft.dependsOn)) this.draft.dependsOn = [];
+    }
+    const savedSent = loadJSON(SENT_KEY);
+    if (Array.isArray(savedSent)) this.sent = savedSent.filter((s) => s && s.proposal && Array.isArray(s.proposal.ops));
+    const savedMe = loadJSON(ME_KEY);
+    this.me = savedMe ? (this.base.resolve ? this.base.resolve(savedMe)?.id || savedMe : savedMe) : null;
+
+    // Drop sent proposals the changelog says were applied.
+    await this.loadChangelog().catch(() => null);
+    this.reconcileSent();
     this.recompute();
     this.ready = true;
   },
 
-  /** Replace canonical data (e.g. after load). */
+  /** Replace canonical data (initial load or "publishing…" refresh). */
   setData(raw, { silent = false } = {}) {
     this.data = normalizeData(raw);
     this.base = buildGraph(this.data);
-    if (!silent) { this.recompute(); this.emit('data'); }
+    if (!silent) {
+      this.changelog = null;
+      this.loadChangelog().then(() => { this.reconcileSent(); this.recompute(); this.emit('data'); }).catch(() => { this.recompute(); this.emit('data'); });
+    }
+  },
+
+  async refreshData() {
+    const raw = await fetchJSON('data/family.json');
+    if ((raw?.meta?.revision ?? 0) !== (this.data?.meta?.revision ?? 0)) this.setData(raw);
+    return raw?.meta?.revision ?? 0;
   },
 
   async loadChangelog() {
@@ -77,86 +115,153 @@ export const store = {
     return this.changelog;
   },
 
+  reconcileSent() {
+    const applied = new Set((this.changelog?.entries || []).map((e) => e.proposalId).filter(Boolean));
+    const still = [];
+    for (const s of this.sent) {
+      if (applied.has(s.id)) this.justApproved.push(s);
+      else still.push(s);
+    }
+    if (still.length !== this.sent.length) { this.sent = still; saveJSON(SENT_KEY, this.sent); }
+  },
+
   /** The draft as a full proposal envelope. */
   draftProposal() {
     const p = newProposal();
+    p.id = this.draft.id;
     p.createdAt = this.draft.updatedAt || new Date().toISOString();
     p.baseRevision = this.data?.meta?.revision ?? 0;
+    p.dependsOn = [...(this.draft.dependsOn || [])];
     p.submitter = { ...this.draft.submitter };
     p.note = this.draft.note || '';
     p.ops = this.draft.ops.map((o) => structuredClone(o));
     return p;
   },
 
-  /** Re-apply the draft on top of the canonical data. */
+  /**
+   * Apply sent proposals (that still apply) then `draftOps` on top of canonical data in preview mode.
+   * Returns { data, refMap, sentResults, draftResult }.
+   */
+  overlay(draftProposal) {
+    let data = this.data;
+    const refMap = {};
+    const sentTouched = new Set();
+    const created = new Set();
+    this.sentStale = new Set();
+    for (const s of this.sent) {
+      const r = applyProposal(data, s.proposal, { ...PREVIEW(), refMap: { ...refMap } });
+      if (!r.ok) { this.sentStale.add(s.id); continue; }
+      data = r.data;
+      for (const ref of Object.keys(r.idMap || {})) refMap[ref] = r.idMap[ref];
+      for (const op of s.proposal.ops) for (const d of opRefs(op).declares) if (!(d in refMap)) refMap[d] = d;
+      r.touched.people.forEach((id) => sentTouched.add(id));
+      r.touched.unions.forEach((id) => sentTouched.add(id));
+      [...(r.created.people || []), ...(r.created.unions || [])].forEach((id) => created.add(id));
+    }
+    let draftResult = null;
+    if (draftProposal && draftProposal.ops.length) {
+      draftResult = applyProposal(data, draftProposal, { ...PREVIEW(), refMap: { ...refMap } });
+    }
+    return { data, refMap, sentTouched, created, draftResult };
+  },
+
+  /** Re-apply sent proposals + draft on top of the canonical data. */
   recompute() {
     this.draftErrors = [];
     this.draftWarnings = [];
-    this.pending = { people: new Set(), unions: new Set(), created: new Set() };
-    if (!this.draft.ops.length) { this.working = this.base; return; }
-    const r = applyProposal(this.data, this.draftProposal(), { mode: 'preview', now: new Date().toISOString(), allowDestructive: true });
-    if (r.ok) {
-      this.working = buildGraph(r.data);
-      this.pending = {
-        people: new Set(r.touched.people),
-        unions: new Set(r.touched.unions),
-        created: new Set([...(r.created.people || []), ...(r.created.unions || [])]),
-      };
-      this.draftWarnings = r.warnings || [];
-    } else {
-      this.working = this.base;
-      this.draftErrors = r.errors || [];
+    this.pending = { draft: new Set(), sent: new Set(), created: new Set() };
+    if (!this.sent.length && !this.draft.ops.length) { this.working = this.base; return; }
+    const { data, sentTouched, created, draftResult } = this.overlay(this.draftProposal());
+    this.pending.sent = sentTouched;
+    this.pending.created = created;
+    let finalData = data;
+    if (draftResult) {
+      if (draftResult.ok) {
+        finalData = draftResult.data;
+        draftResult.touched.people.forEach((id) => this.pending.draft.add(id));
+        draftResult.touched.unions.forEach((id) => this.pending.draft.add(id));
+        [...(draftResult.created.people || []), ...(draftResult.created.unions || [])].forEach((id) => this.pending.created.add(id));
+        this.draftWarnings = draftResult.warnings || [];
+      } else {
+        this.draftErrors = draftResult.errors || [];
+      }
     }
+    this.working = finalData === this.data ? this.base : buildGraph(finalData);
   },
 
-  /** Is this id something that only exists / changed in the draft? */
-  isPending(id) { return this.pending.people.has(id) || this.pending.unions.has(id); },
+  /** 'draft' | 'sent' | null — for "not sent yet" / "awaiting approval" badges. */
+  pendingKind(id) {
+    if (this.pending.draft.has(id)) return 'draft';
+    if (this.pending.sent.has(id)) return 'sent';
+    return null;
+  },
+  isPending(id) { return this.pendingKind(id) !== null; },
   isCreated(id) { return this.pending.created.has(id); },
 
-  /** Fresh temp refs (never reused within this draft). */
-  newRef() { this.draft.counter += 1; this.persistDraft(); return `new${this.draft.counter}`; },
-  newUnionRef() { this.draft.counter += 1; this.persistDraft(); return `newu${this.draft.counter}`; },
+  /** Fresh temp refs from a per-browser counter that never resets (refs stay unique across proposals). */
+  nextCounter() {
+    const n = (Number(loadJSON(COUNTER_KEY)) || 0) + 1;
+    saveJSON(COUNTER_KEY, n);
+    return n;
+  },
+  newRef() { return `new${this.nextCounter()}`; },
+  newUnionRef() { return `newu${this.nextCounter()}`; },
 
-  /**
-   * Try to add ops to the draft. They are trial-applied together with the existing draft; if anything fails,
-   * nothing is added and {ok:false, errors} is returned (errors carry `op` indexes relative to the FULL draft).
-   */
-  addOps(ops) {
-    const list = Array.isArray(ops) ? ops : [ops];
-    const trial = this.draftProposal();
-    trial.ops.push(...list.map((o) => structuredClone(o)));
-    const r = applyProposal(this.data, trial, { mode: 'preview', now: new Date().toISOString(), allowDestructive: true });
-    if (!r.ok) return { ok: false, errors: r.errors, warnings: r.warnings };
-    this.draft.ops.push(...list.map((o) => structuredClone(o)));
-    this.touchDraft();
-    return { ok: true, warnings: r.warnings, idMap: r.idMap };
+  /** Which sent proposals declared these refs? (for automatic dependsOn) */
+  sentProposalsDeclaring(refs) {
+    const ids = new Set();
+    for (const s of this.sent) {
+      for (const op of s.proposal.ops) {
+        if (opRefs(op).declares.some((d) => refs.includes(d))) ids.add(s.id);
+      }
+    }
+    return [...ids];
   },
 
   /**
-   * Remove op at index i, plus any later ops that depend on refs it declared (transitively),
-   * plus any later ops that no longer apply. Returns the number of ops removed.
+   * Try to add ops to the draft. They are trial-applied with the existing draft (on top of sent proposals);
+   * if anything fails nothing is added and {ok:false, errors} is returned (op indexes are relative to the FULL draft).
+   */
+  addOps(ops) {
+    const list = (Array.isArray(ops) ? ops : [ops]).map((o) => structuredClone(o));
+    const trial = this.draftProposal();
+    trial.ops.push(...list);
+    // Refs used but not declared in the draft must come from sent proposals → dependsOn.
+    const declared = new Set(trial.ops.flatMap((o) => opRefs(o).declares));
+    const foreign = [...new Set(trial.ops.flatMap((o) => opRefs(o).uses))].filter((r) => /^newu?\d+$/.test(r) && !declared.has(r));
+    const deps = new Set([...(trial.dependsOn || []), ...this.sentProposalsDeclaring(foreign)]);
+    trial.dependsOn = [...deps];
+    const { draftResult } = this.overlay(trial);
+    if (!draftResult || !draftResult.ok) return { ok: false, errors: draftResult ? draftResult.errors : [], warnings: draftResult ? draftResult.warnings : [] };
+    this.draft.ops.push(...list);
+    this.draft.dependsOn = trial.dependsOn;
+    this.touchDraft();
+    return { ok: true, warnings: draftResult.warnings, idMap: draftResult.idMap };
+  },
+
+  /**
+   * Remove op at index i, plus later ops that depend on refs it declared (transitively),
+   * plus later ops that no longer apply. Returns the number of ops removed.
    */
   removeOp(i) {
     if (i < 0 || i >= this.draft.ops.length) return 0;
     const before = this.draft.ops.length;
     const dead = new Set(opRefs(this.draft.ops[i]).declares);
-    const kept = [];
+    let ops = [];
     this.draft.ops.forEach((op, idx) => {
       if (idx === i) return;
       if (idx > i) {
         const { declares, uses } = opRefs(op);
         if (uses.some((u) => dead.has(u))) { declares.forEach((d) => dead.add(d)); return; }
       }
-      kept.push(op);
+      ops.push(op);
     });
-    // Drop anything that still fails (e.g. reorder that only made sense with the removed op).
-    let ops = kept;
     for (let guard = 0; guard < 50; guard++) {
       const p = this.draftProposal();
       p.ops = ops;
-      const r = applyProposal(this.data, p, { mode: 'preview', now: new Date().toISOString(), allowDestructive: true });
-      if (r.ok) break;
-      const bad = new Set((r.errors || []).map((e) => e.op).filter((n) => Number.isInteger(n)));
+      const { draftResult } = this.overlay(p);
+      if (!draftResult || draftResult.ok) break;
+      const bad = new Set((draftResult.errors || []).map((e) => e.op).filter((n) => Number.isInteger(n)));
       if (!bad.size) break;
       const deadRefs = new Set();
       ops.forEach((op, idx) => { if (bad.has(idx)) opRefs(op).declares.forEach((d) => deadRefs.add(d)); });
@@ -167,13 +272,16 @@ export const store = {
     return before - ops.length;
   },
 
-  /** Replace the whole op list (used by "load proposal into my draft"). */
-  replaceDraft(proposal) {
-    const d = emptyDraft();
+  /** Replace the draft with a proposal (admin "correct this proposal" / preview "load into my draft"). */
+  replaceDraft(proposal, { source = null } = {}) {
+    const d = emptyDraft(this.draft.submitter);
     d.ops = (proposal.ops || []).map((o) => structuredClone(o));
     d.submitter = { ...d.submitter, ...(proposal.submitter || {}) };
     d.note = proposal.note || '';
-    // Keep temp-ref counter above any ref used in the loaded ops.
+    d.dependsOn = [...(proposal.dependsOn || [])];
+    d.source = source;
+    if (source && proposal.id) d.id = proposal.id;
+    // Keep the global ref counter above any ref used in the loaded ops.
     let max = 0;
     for (const op of d.ops) {
       const { declares, uses } = opRefs(op);
@@ -182,16 +290,37 @@ export const store = {
         if (m) max = Math.max(max, Number(m[1]));
       }
     }
-    d.counter = max;
+    if (max > (Number(loadJSON(COUNTER_KEY)) || 0)) saveJSON(COUNTER_KEY, max);
     this.draft = d;
     this.touchDraft();
   },
 
   clearDraft() {
-    const keepSubmitter = { ...this.draft.submitter };
-    this.draft = emptyDraft();
-    this.draft.submitter = keepSubmitter;
+    this.draft = emptyDraft(this.draft.submitter);
     this.touchDraft();
+  },
+
+  /** Called when the visitor sends the draft (WhatsApp / GitHub / email / copy). Moves it to the sent queue. */
+  markSent(via) {
+    if (!this.draft.ops.length) return null;
+    const proposal = this.draftProposal();
+    const entry = { id: proposal.id, at: new Date().toISOString(), via, proposal };
+    this.sent = [...this.sent.filter((s) => s.id !== entry.id), entry];
+    saveJSON(SENT_KEY, this.sent);
+    this.draft = emptyDraft(this.draft.submitter);
+    this.persistDraft();
+    this.recompute();
+    this.emit('sent');
+    this.emit('draft');
+    return entry;
+  },
+
+  /** Forget a sent proposal (e.g. the owner rejected it, or the visitor withdraws it). */
+  forgetSent(id) {
+    this.sent = this.sent.filter((s) => s.id !== id);
+    saveJSON(SENT_KEY, this.sent);
+    this.recompute();
+    this.emit('sent');
   },
 
   setSubmitter(patch) { Object.assign(this.draft.submitter, patch); this.persistDraft(); },
@@ -212,6 +341,15 @@ export const store = {
     this.emit('me');
   },
 
+  /** Viewer preference for Arabic-Indic (arab) vs Western (latn) digits. */
+  digits: 'latn',
+  setDigitsPref(d, { silent = false } = {}) {
+    this.digits = d === 'arab' ? 'arab' : 'latn';
+    setArabicDigits(this.digits === 'arab');
+    try { setDigits(this.digits); } catch { /* optional */ }
+    if (!silent) { saveJSON(DIGITS_KEY, this.digits); this.emit('data'); }
+  },
+
   on(evt, fn) {
     listeners[evt].add(fn);
     return () => listeners[evt].delete(fn);
@@ -226,6 +364,11 @@ export const store = {
   repoUrl(path = '') {
     const { owner, name } = this.config.repo;
     return `https://github.com/${owner}/${name}${path}`;
+  },
+  /** Absolute site URL + hash route, for sharing. */
+  siteLink(hash = '') {
+    const base = this.config.siteUrl || (location.origin + location.pathname);
+    return base.replace(/#.*$/, '') + hash;
   },
 };
 

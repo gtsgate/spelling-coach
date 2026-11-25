@@ -6,9 +6,18 @@
 <title>شجرة العائلة الكبرى · The Grand Family Tree</title>
 <meta name="description" content="شجرة العائلة الكبرى — سجلّ حيّ لعائلتنا يبنيه أفرادها معاً. The Grand Family Tree — a living record of our family, built together.">
 <meta name="theme-color" content="#2f5d50">
+<meta name="robots" content="noindex,nofollow">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="img/icon-192.png">
 <meta property="og:title" content="شجرة العائلة الكبرى · The Grand Family Tree">
 <meta property="og:description" content="تعرّف على عائلتك وأضف فرعك · Get to know the family and add your branch">
 <meta property="og:type" content="website">
+<meta property="og:locale" content="ar_AR">
+<meta property="og:locale:alternate" content="en_GB">
+<meta property="og:image" content="https://gtsgate.github.io/spelling-coach/family-tree/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f5d50' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 3v18M12 8l-5 3M12 8l5 3M12 14l-6 3M12 14l6 3'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,13 +25,16 @@
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/tree.css">
 <link rel="stylesheet" href="css/person.css">
+<link rel="stylesheet" href="css/forms.css">
 <link rel="stylesheet" href="css/pages.css">
+<link rel="stylesheet" href="css/flows.css">
 <script>
   // Apply saved language/theme before first paint to avoid a flash.
   (function () {
     try {
       var l = localStorage.getItem('gft.lang');
       if (l === 'en' || l === 'ar') { document.documentElement.lang = l; document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr'; }
+      var ts = localStorage.getItem('gft.textSize'); if (ts) document.documentElement.dataset.textSize = ts;
       var th = localStorage.getItem('gft.theme');
       if (th === 'dark' || th === 'light') document.documentElement.dataset.theme = th;
       else if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.dataset.theme = 'dark';
@@ -34,10 +46,12 @@
 <a class="skip-link" href="#app">تخطَّ إلى المحتوى · Skip to content</a>
 <header id="app-header" class="app-header"></header>
 <div id="demo-banner" class="demo-banner" role="note" hidden></div>
+<div id="publish-note" class="publish-note" role="status" hidden></div>
 <main id="app" class="app-main" tabindex="-1">
   <div class="boot-loader" aria-live="polite"><span class="spinner" aria-hidden="true"></span><span>جارٍ التحميل… Loading…</span></div>
 </main>
 <footer id="app-footer" class="app-footer"></footer>
+<div id="draft-bar" class="draft-bar" hidden></div>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 <noscript><p style="padding:1rem;text-align:center">يتطلّب هذا الموقع تفعيل JavaScript. · This site needs JavaScript enabled.</p></noscript>
 <script type="module" src="js/app.js"></script>
